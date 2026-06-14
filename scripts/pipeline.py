@@ -17,6 +17,7 @@ from constants import (
     DEFAULT_DISEASE_MODE,
     DEFAULT_OUTPUT_DIR,
     GRCH38_FASTA,
+    resolve_builtin_disease_key,
     resolve_disease_mode,
 )
 from apoe_checker import check_apoe
@@ -112,7 +113,8 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
 
     # Step 2b: APOE genotype check (Alzheimer-specific)
     apoe_result = None
-    if "alzheimer" in config.disease_query.lower():
+    canonical_key = resolve_builtin_disease_key(config.disease_query)
+    if canonical_key == "alzheimer disease" or "alzheimer" in config.disease_query.lower():
         logger.info("Step 2b: Checking APOE genotype")
         apoe_result = check_apoe(normalized_vcf)
         logger.info("APOE result: %s", apoe_result)
@@ -238,6 +240,19 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
 
     # Step 5C: Post-GPA filtering
     logger.info("Step 5C: Post-GPA ClinVar phenotype matching and Tier 3 denoising")
+    # Tier 1 variants should also be required to match the disease phenotype in
+    # ClinVar; otherwise broad pathogenic variants in non-disease genes (e.g.
+    # VWF p.Gln1311Ter) are miscalled as Tier 1.
+    tier1_before = len(gpa_result.get("tier1_variants", []))
+    gpa_result["tier1_variants"] = filter_variants_by_clinvar_disease(
+        gpa_result.get("tier1_variants", []),
+        config.disease_query,
+        require_match=True,
+    )
+    logger.info(
+        "Tier 1 ClinVar phenotype filtering: %d -> %d",
+        tier1_before, len(gpa_result["tier1_variants"]),
+    )
     tier2_before = len(gpa_result.get("tier2_variants", []))
     gpa_result["tier2_variants"] = filter_variants_by_clinvar_disease(
         gpa_result.get("tier2_variants", []),

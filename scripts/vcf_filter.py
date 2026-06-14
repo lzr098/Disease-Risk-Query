@@ -279,21 +279,37 @@ def filter_vcf_by_gene_set(
         vcfs_to_merge = [region_vcf]
 
         # ClinVar safety net (disease-matched when disease_name is given)
+        # When a disease is specified, we only use ClinVar variants whose
+        # phenotype names match that disease. Falling back to the broad
+        # all-pathogenic BED pulls in P/LP variants for unrelated disorders
+        # (e.g. VWF, CD36, MYH11) and produces false-positive Tier 1/2 hits.
         clinvar_count = 0
         if clinvar_safetynet:
             if disease_name:
                 disease_clinvar_bed = tmp_dir / "clinvar_disease_matched.bed"
                 try:
                     build_disease_clinvar_bed(disease_name, disease_clinvar_bed)
-                    source_bed = disease_clinvar_bed if disease_clinvar_bed.exists() and disease_clinvar_bed.stat().st_size > 0 else None
+                    if disease_clinvar_bed.exists() and disease_clinvar_bed.stat().st_size > 0:
+                        source_bed = disease_clinvar_bed
+                    else:
+                        logger.warning(
+                            "Disease-matched ClinVar BED is empty for '%s'; "
+                            "skipping ClinVar safety net to avoid unrelated "
+                            "pathogenic variants.",
+                            disease_name,
+                        )
+                        source_bed = None
                 except Exception as exc:
-                    logger.warning("Failed to build disease-matched ClinVar BED, falling back to broad BED: %s", exc)
+                    logger.warning(
+                        "Failed to build disease-matched ClinVar BED for '%s'; "
+                        "skipping ClinVar safety net: %s",
+                        disease_name, exc,
+                    )
                     source_bed = None
+            elif CLINVAR_PATHOGENIC_BED.exists():
+                source_bed = CLINVAR_PATHOGENIC_BED
             else:
                 source_bed = None
-
-            if source_bed is None and CLINVAR_PATHOGENIC_BED.exists():
-                source_bed = CLINVAR_PATHOGENIC_BED
 
             if source_bed is not None:
                 norm_clinvar_bed = tmp_dir / "clinvar_norm.bed"

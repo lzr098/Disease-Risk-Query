@@ -127,11 +127,19 @@ def check_apoe(
     }
 
     if not present:
+        # For a genotyped VCF (variant-only callset), absence of the APOE
+        # ε2/ε4 alternate alleles means the sample is homozygous reference at
+        # both sites, i.e. ε3/ε3. We still flag when the VCF is known to have
+        # been heavily filtered for common variants, as the sites may have been
+        # removed post-genotyping.
+        result["inferred_allele"] = "ε3/ε3"
+        result["is_reference"] = True
         result["warning"] = (
-            "APOE ε2/ε4 sites (rs7412/rs429358) were not found in the VCF. "
-            "This VCF appears to have been filtered for rare variants; APOE "
-            "genotype cannot be determined and late-onset Alzheimer risk "
-            "assessment is incomplete."
+            "APOE ε2/ε4 sites (rs7412/rs429358) were not found in this "
+            "genotyped VCF. In a variant-only callset this indicates both "
+            "sites are reference (ε3/ε3). If the VCF was hard-filtered to "
+            "remove common variants, consider confirming in an unfiltered "
+            "gVCF or full callset."
         )
         return result
 
