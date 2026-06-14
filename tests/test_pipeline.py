@@ -142,5 +142,25 @@ def test_vep115_compat_annotation_and_parser():
         assert variants[0]["IMPACT"] in {"MODERATE", "HIGH"}
 
 
+def test_ad_template_excludes_non_ad_genes():
+    from disease_reference import get_disease_reference
+    ref = get_disease_reference("alzheimer disease")
+    gene_set = {g["gene"] for g in ref["gene_set"]}
+    non_ad = {"VWF", "CD36", "MYH11"}
+    assert non_ad.isdisjoint(gene_set), f"Non-AD genes leaked into AD template: {non_ad & gene_set}"
+
+
+def test_clinvar_disease_filter_rejects_non_ad_pathogenic():
+    from clinvar_phenotype_matcher import filter_variants_by_clinvar_disease
+
+    variants = [
+        {"CHROM": "chr12", "POS": 6019487, "REF": "G", "ALT": "A", "GENE": "VWF", "clinvar_diseases": ["Hereditary_von_Willebrand_disease"]},
+        {"CHROM": "chr7", "POS": 80661109, "REF": "AAC", "ALT": "A", "GENE": "CD36", "clinvar_diseases": ["CD36-related_disorder"]},
+        {"CHROM": "chr16", "POS": 15735448, "REF": "G", "ALT": "A", "GENE": "MYH11", "clinvar_diseases": ["Aortic_aneurysm"]},
+    ]
+    filtered = filter_variants_by_clinvar_disease(variants, "alzheimer disease", require_match=True)
+    assert len(filtered) == 0, "Non-AD pathogenic variants must be filtered out when require_match=True"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
