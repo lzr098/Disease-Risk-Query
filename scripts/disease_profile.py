@@ -263,15 +263,26 @@ def build_default_contribution_model(mode: str) -> dict[str, Any]:
             "weight": 0.8,
             "description": "Moderate-penetrance variant in disease gene.",
         },
+        "known_pathogenic": {
+            "scoring": "template_curated_pathogenic_x_zygosity_x_penetrance",
+            "weight": 0.9,
+            "description": (
+                "Curated known pathogenic variant from disease template; "
+                "scored by dosage, gene penetrance, and template contribution score."
+            ),
+        },
         "dosage_risk": {
             "scoring": "copy_number_x_log_or",
             "weight": 0.5,
             "description": "Risk allele with dosage effect (e.g. APOE e4).",
         },
         "gwas_prs": {
-            "scoring": "weighted_sum_beta_x_dosage",
+            "scoring": "weighted_sum_beta_x_dosage_normalised_by_sqrt_n",
             "weight": 0.3,
-            "description": "Common variant polygenic contribution.",
+            "description": (
+                "Common variant polygenic contribution; "
+                "normalised by sqrt(variant_count) for cross-disease comparability."
+            ),
         },
         "regulatory": {
             "scoring": "gene_contribution_x_predicted_impact",

@@ -25,6 +25,7 @@ LEVEL_MEANING: dict[str, str] = {
 _LAYER_LABELS = {
     "mendelian_high": "高外显致病突变",
     "mendelian_mod": "中等外显变异",
+    "known_pathogenic": "已知致病位点（模板）",
     "dosage_risk": "剂量风险位点",
     "gwas_prs": "GWAS / PRS 贡献",
     "regulatory": "调控区罕见变异",
@@ -121,6 +122,26 @@ def _render_layer_table(layer: str, items: list[dict]) -> list[str]:
         lines.append("|-----|------|------|--------|------|----------|------|----|----|------|------|")
         for d in items:
             lines.append(_known_variant_table_row(d))
+    elif layer in ("dosage_risk", "known_pathogenic"):
+        lines.append("| SNP | 基因 | 位点 | 基因型 | 来源 | 风险等位 | 剂量 | 贡献 | 置信度 | 说明 |")
+        lines.append("|-----|------|------|--------|------|----------|------|------|--------|------|")
+        for d in items:
+            # Render similar to dosage_risk but without OR/beta
+            rsid = d.get("rsid") or "-"
+            gene = d.get("gene") or "-"
+            variant = d.get("variant") or "-"
+            risk_allele = d.get("risk_allele") or d.get("effect_allele") or "-"
+            dosage = d.get("dosage") if d.get("dosage") is not None else "-"
+            gt = d.get("gt") or "0/0"
+            status = "推断 ref/ref" if d.get("inferred_ref_ref") else "样本检出"
+            contrib = d.get("contribution")
+            contrib_str = f"{contrib:.3f}" if isinstance(contrib, (int, float)) else "-"
+            confidence = d.get("confidence", "-")
+            note = d.get("note", "")
+            lines.append(
+                f"| {rsid} | {gene} | `{variant}` | {gt} | {status} | {risk_allele} | "
+                f"{dosage} | {contrib_str} | {confidence} | {note} |"
+            )
     elif layer == "dosage_risk":
         lines.append("| SNP | 基因 | 位点 | 基因型 | 来源 | 风险等位 | 剂量 | OR | beta | 贡献 | 说明 |")
         lines.append("|-----|------|------|--------|------|----------|------|----|----|------|------|")
@@ -149,12 +170,17 @@ def _executive_summary(
     findings: list[str] = []
     high = contribution.get("mendelian_high", [])
     mod = contribution.get("mendelian_mod", [])
+    known = contribution.get("known_pathogenic", [])
     dosage = contribution.get("dosage_risk", [])
     gwas = contribution.get("gwas_prs", {})
 
     if high:
         genes = sorted({h.get("gene", "") for h in high})
         findings.append(f"发现高外显致病突变（{', '.join(genes)}）")
+    elif known:
+        genes = sorted({k.get("gene", "") for k in known if not k.get("inferred_ref_ref")})
+        if genes:
+            findings.append(f"发现已知致病位点真实检出（{', '.join(genes)}）")
     elif mod:
         genes = sorted({m.get("gene", "") for m in mod})
         findings.append(f"发现中等外显变异（{', '.join(genes)}）")
@@ -286,20 +312,30 @@ def generate_report(
     lines.append("## 4. 分层发现")
     lines.append("")
 
-    layer_order = ["mendelian_high", "mendelian_mod", "dosage_risk", "gwas_prs", "regulatory"]
+    layer_order = [
+        "mendelian_high", "mendelian_mod", "known_pathogenic",
+        "dosage_risk", "gwas_prs", "regulatory",
+    ]
     raw_layer_items = {
         "mendelian_high": contribution.get("mendelian_high", []),
         "mendelian_mod": contribution.get("mendelian_mod", []),
+        "known_pathogenic": contribution.get("known_pathogenic", []),
         "dosage_risk": contribution.get("dosage_risk", []),
         "gwas_prs": contribution.get("gwas_prs", {}).get("variants", []),
         "regulatory": contribution.get("regulatory", []),
     }
     # For GWAS/PRS, suppress all-ref/ref zero-contribution noise in the table,
     # but keep the summary counts honest.
+    # For known_pathogenic, also filter out absent (ref/ref) to reduce noise.
     layer_items: dict[str, list[dict]] = {}
     for layer in layer_order:
         items = list(raw_layer_items[layer])
         if layer == "gwas_prs":
+            items = [
+                x for x in items
+                if not x.get("inferred_ref_ref") or x.get("contribution", 0) != 0
+            ]
+        if layer == "known_pathogenic":
             items = [
                 x for x in items
                 if not x.get("inferred_ref_ref") or x.get("contribution", 0) != 0
@@ -309,6 +345,7 @@ def generate_report(
     layer_scores = {
         "mendelian_high": sum(x.get("contribution", 0) for x in raw_layer_items["mendelian_high"]),
         "mendelian_mod": sum(x.get("contribution", 0) for x in raw_layer_items["mendelian_mod"]),
+        "known_pathogenic": sum(x.get("contribution", 0) for x in raw_layer_items["known_pathogenic"]),
         "dosage_risk": sum(x.get("contribution", 0) for x in raw_layer_items["dosage_risk"]),
         "gwas_prs": abs(contribution.get("gwas_prs", {}).get("score", 0.0)),
         "regulatory": sum(x.get("contribution", 0) for x in raw_layer_items["regulatory"]),

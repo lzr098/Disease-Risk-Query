@@ -2,10 +2,13 @@
 
 Scores variants by how they contribute to the target disease, not just by
 generic pathogenicity. Supports multiple layers:
-- mendelian_high: high-penetrance pathogenic variants
+- mendelian_high: high-penetrance pathogenic variants (from disease-space VCF)
 - mendelian_mod: moderate-penetrance variants in disease genes
+- known_pathogenic: curated known pathogenic variants from disease template
+  (queried exactly, scored by zygosity × penetrance-adjusted contribution)
 - dosage_risk: risk alleles with copy-number effect (e.g. APOE e4)
 - gwas_prs: weighted polygenic contribution from common variants
+  (normalised by sqrt(variant_count) for cross-disease comparability)
 - regulatory: weak evidence from regulatory regions
 """
 
@@ -66,6 +69,7 @@ def _is_likely_benign_clinvar(v: dict) -> bool:
 class ContributionResult:
     mendelian_high: list[dict] = field(default_factory=list)
     mendelian_mod: list[dict] = field(default_factory=list)
+    known_pathogenic: list[dict] = field(default_factory=list)
     dosage_risk: list[dict] = field(default_factory=list)
     gwas_prs: dict = field(default_factory=lambda: {
         "score": 0.0,
@@ -84,6 +88,7 @@ class ContributionResult:
         return {
             "mendelian_high": self.mendelian_high,
             "mendelian_mod": self.mendelian_mod,
+            "known_pathogenic": self.known_pathogenic,
             "dosage_risk": self.dosage_risk,
             "gwas_prs": self.gwas_prs,
             "regulatory": self.regulatory,
@@ -172,6 +177,63 @@ def _score_mendelian_mod(
     return results
 
 
+def _score_known_pathogenic(
+    profile: DiseaseProfile,
+    known_genotypes: list[KnownVariantGenotype],
+) -> list[dict]:
+    """Curated known pathogenic variants from the disease template.
+
+    Each variant has its contribution_score from the template. The actual
+    contribution is scaled by a zygosity factor derived from the gene's
+    penetrance_score:
+
+    - penetrance >= 0.8 (likely dominant):
+        heterozygous (dosage=1) → full score; homozygous → ceiling 1.0
+    - 0.3 <= penetrance < 0.8 (moderate / incomplete penetrance):
+        dosage-based; heterozygous ~0.7×, homozygous ~1.4×
+    - penetrance < 0.3 (likely recessive):
+        homozygous/compound-het (dosage>=2) → full score;
+        heterozygous carrier → 0.1× (minimal contribution)
+    """
+    results = []
+    gene_map = {g.gene: g for g in profile.gene_set}
+    pathogenic_vars = [
+        kg for kg in known_genotypes
+        if kg.variant.variant_class == "known_pathogenic"
+    ]
+    for kg in pathogenic_vars:
+        v = kg.variant
+        if kg.dosage == 0 and kg.inferred_ref_ref:
+            # REF/REF (absent); skip — no risk contribution
+            continue
+        gene_w = gene_map.get(v.gene)
+        penetrance_score = gene_w.penetrance_score if gene_w else 0.5
+
+        # Zygosity factor based on penetrance
+        if penetrance_score >= 0.8:  # High penetrance (likely dominant)
+            zygosity_factor = min(kg.dosage, 1.0)  # 1 copy enough, hom capped
+        elif penetrance_score >= 0.3:  # Moderate penetrance
+            zygosity_factor = min(kg.dosage * 0.7, 1.4)
+        else:  # Low/very_low penetrance (likely recessive)
+            zygosity_factor = 1.0 if kg.dosage >= 2 else 0.1  # carrier=0.1
+
+        contribution = v.contribution_score * zygosity_factor
+
+        results.append({
+            "rsid": v.rsid or v.vcf_key,
+            "gene": v.gene or "-",
+            "variant": v.vcf_key,
+            "gt": kg.gt,
+            "dosage": kg.dosage,
+            "risk_allele": v.effect_allele or v.alt,
+            "contribution": round(min(contribution, 1.0), 3),
+            "inferred_ref_ref": kg.inferred_ref_ref,
+            "confidence": v.confidence,
+            "note": v.note or "",
+        })
+    return results
+
+
 def _score_dosage_risk(
     profile: DiseaseProfile,
     known_genotypes: list[KnownVariantGenotype],
@@ -207,7 +269,13 @@ def _score_gwas_prs(
     known_genotypes: list[KnownVariantGenotype],
     vcf_qc: dict,
 ) -> dict:
-    """Weighted polygenic contribution from GWAS lead and PRS variants."""
+    """Weighted polygenic contribution from GWAS lead and PRS variants.
+
+    Each variant contributes beta × dosage × weight. The raw sum is
+    normalised by sqrt(n) so that panels of different sizes (e.g. 40 vs
+    77 GWAS SNPs across diseases) produce roughly comparable scores.
+    A larger panel still contributes more, but with diminishing returns.
+    """
     variants = [
         kg for kg in known_genotypes
         if kg.variant.variant_class in ("gwas_lead", "prs")
@@ -236,14 +304,20 @@ def _score_gwas_prs(
             "inferred_ref_ref": kg.inferred_ref_ref,
         })
 
+    # Normalise by sqrt(variant count) for cross-disease comparability
+    n = len(variants)
+    total_normalised = total / math.sqrt(n)
+
     # Downweight if common variants are filtered
     if vcf_qc.get("likely_filtered"):
-        total *= VCF_GWAS_DOWNWEIGHT_IF_FILTERED
+        total_normalised *= VCF_GWAS_DOWNWEIGHT_IF_FILTERED
 
     return {
-        "score": round(total, 4),
-        "percentile": None,  # Would require population reference
-        "variant_count": len(variants),
+        "score": round(total_normalised, 4),
+        "score_raw": round(total, 4),
+        "sqrt_n": round(math.sqrt(n), 1),
+        "percentile": None,
+        "variant_count": n,
         "variants": details,
     }
 
@@ -317,6 +391,9 @@ def _layer_level(score: float, layer: str, profile: DiseaseProfile) -> str:
     # Mendelian layers are binary-presence driven
     if layer in ("mendelian_high", "mendelian_mod"):
         return "high" if score >= 0.8 else ("moderate" if score >= 0.3 else "low")
+    # Known pathogenic: presence is strong evidence
+    if layer == "known_pathogenic":
+        return "high" if score >= 0.8 else ("moderate" if score >= 0.3 else "low")
     # Dosage and GWAS/PRS use continuous thresholds
     if layer == "dosage_risk":
         return "high" if score >= 0.5 else ("moderate" if score >= 0.15 else "low")
@@ -359,6 +436,7 @@ def score(
 
     result.mendelian_high = _score_mendelian_high(profile, tiered_variants)
     result.mendelian_mod = _score_mendelian_mod(profile, tiered_variants)
+    result.known_pathogenic = _score_known_pathogenic(profile, known_genotypes)
     result.dosage_risk = _score_dosage_risk(profile, known_genotypes)
     result.gwas_prs = _score_gwas_prs(profile, known_genotypes, vcf_qc)
     result.regulatory = _score_regulatory(profile, tiered_variants)
@@ -368,6 +446,7 @@ def score(
     model = profile.contribution_model or {}
     high_score = sum(x["contribution"] for x in result.mendelian_high)
     mod_score = sum(x["contribution"] for x in result.mendelian_mod)
+    known_score = sum(x["contribution"] for x in result.known_pathogenic)
     dosage_score = sum(x["contribution"] for x in result.dosage_risk)
     gwas_score = abs(result.gwas_prs.get("score", 0.0))
     reg_score = sum(x["contribution"] for x in result.regulatory)
@@ -375,6 +454,7 @@ def score(
     weights = {
         "mendelian_high": model.get("mendelian_high", {}).get("weight", 1.0),
         "mendelian_mod": model.get("mendelian_mod", {}).get("weight", 0.8),
+        "known_pathogenic": model.get("known_pathogenic", {}).get("weight", 0.9),
         "dosage_risk": model.get("dosage_risk", {}).get("weight", 0.5),
         "gwas_prs": model.get("gwas_prs", {}).get("weight", 0.3),
         "regulatory": model.get("regulatory", {}).get("weight", 0.1),
@@ -383,6 +463,7 @@ def score(
     overall = (
         min(high_score, 1.0) * weights["mendelian_high"]
         + min(mod_score, 1.0) * weights["mendelian_mod"]
+        + min(known_score, 1.0) * weights["known_pathogenic"]
         + min(dosage_score, 1.0) * weights["dosage_risk"]
         + min(gwas_score, 1.0) * weights["gwas_prs"]
         + min(reg_score, 1.0) * weights["regulatory"]
@@ -398,6 +479,7 @@ def score(
     result.layer_levels = {
         "mendelian_high": _layer_level(high_score, "mendelian_high", profile),
         "mendelian_mod": _layer_level(mod_score, "mendelian_mod", profile),
+        "known_pathogenic": _layer_level(known_score, "known_pathogenic", profile),
         "dosage_risk": _layer_level(dosage_score, "dosage_risk", profile),
         "gwas_prs": _layer_level(gwas_score, "gwas_prs", profile),
         "regulatory": _layer_level(reg_score, "regulatory", profile),
@@ -406,6 +488,7 @@ def score(
     result.details = [
         {"layer": "mendelian_high", "count": len(result.mendelian_high), "score": round(high_score, 3)},
         {"layer": "mendelian_mod", "count": len(result.mendelian_mod), "score": round(mod_score, 3)},
+        {"layer": "known_pathogenic", "count": len(result.known_pathogenic), "score": round(known_score, 3)},
         {"layer": "dosage_risk", "count": len(result.dosage_risk), "score": round(dosage_score, 3)},
         {"layer": "gwas_prs", "count": result.gwas_prs["variant_count"], "score": round(gwas_score, 3)},
         {"layer": "regulatory", "count": len(result.regulatory), "score": round(reg_score, 3)},
