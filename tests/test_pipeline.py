@@ -198,5 +198,15 @@ def test_clinvar_disease_keywords_chinese_no_empty():
     assert not any(_normalize_text(kw) == "" for kw in kws)
 
 
+def test_resolve_disease_mode_unknown_disease():
+    from constants import resolve_disease_mode, DISEASE_MODE_COMPLEX, DISEASE_MODE_MENDELIAN
+
+    # Unknown complex-trait keyword should resolve to complex mode
+    assert resolve_disease_mode("diabetes") == DISEASE_MODE_COMPLEX
+    assert resolve_disease_mode("hypertension") == DISEASE_MODE_COMPLEX
+    # Unknown disease without complex keyword defaults to mendelian
+    assert resolve_disease_mode("foobar syndrome") == DISEASE_MODE_MENDELIAN
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

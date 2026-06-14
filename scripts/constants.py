@@ -4299,6 +4299,7 @@ def resolve_disease_mode(disease_name: str, requested_mode: str = DISEASE_MODE_A
     if builtin_key:
         return DISEASE_BUILTIN_REFS[builtin_key].get("mode", DISEASE_MODE_MENDELIAN)
     # Keyword heuristic
+    norm = disease_name.lower()
     for kw in COMPLEX_DISEASE_KEYWORDS:
         if kw in norm:
             return DISEASE_MODE_COMPLEX
