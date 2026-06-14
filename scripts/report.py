@@ -93,7 +93,9 @@ def generate_report(
         if vcf_qc.get("common_variants_filtered"):
             lines.append(
                 "- **⚠️ 常见变异过滤提示**：该 VCF 的锚定位点检出率低于阈值，"
-                "疑似已过滤常见变异。复杂表型模式下 GWAS 维度已自动折算。"
+                "说明常见 SNP 位点未在 VCF 中保留。对于已基因分型的 callset，"
+                "未保留的常见 SNP 可推断为 ref/ref（0/0），并非测序漏检；"
+                "复杂表型模式下 GWAS 维度已按此情况自动折算。"
             )
         else:
             lines.append("- **VCF 完整性**：锚定位点检出率正常，GWAS 维度可正常评估。")
@@ -229,8 +231,8 @@ def generate_report(
                     f"{s.get('effect_allele', '')} | {beta_str} | {or_str} | {contrib_str} | {s.get('note', '')} |"
                 )
         else:
-            lines.append(f"- 已知 GWAS lead SNP 在样本中均未检出（共 {len(gwas_lead_snps)} 个）。")
-            lines.append("- 可能原因：该 VCF 已过滤常见变异，或样本在这些位点为 reference 基因型。")
+            lines.append(f"- 已知 GWAS lead SNP 均未在 VCF 中保留（共 {len(gwas_lead_snps)} 个）。")
+            lines.append("- 在已基因分型的 callset 中，未保留的常见 SNP 应推断为 ref/ref（0/0），而非漏检。")
         lines.append("")
 
     if gwas_summary:
@@ -350,8 +352,8 @@ def generate_report(
         lines.append("- 风险评分综合 ClinVar、OMIM、HPO 及文献证据，仅供科研参考，不构成临床诊断。")
     if vcf_qc and vcf_qc.get("common_variants_filtered"):
         lines.append(
-            "- **输入 VCF 疑似已过滤常见变异**：锚定位点检出率较低，GWAS 常见风险等位基因可能缺失。"
-            "如需更准确的复杂表型遗传贡献评估，建议使用未过滤的完整 VCF 重新运行。"
+            "- **输入 VCF 疑似已过滤常见变异**：锚定位点检出率较低，GWAS 常见风险等位基因在 VCF 中未保留。"
+            "在已基因分型 callset 中可推断为 ref/ref；如需更准确的复杂表型遗传贡献评估，建议使用未过滤的完整 VCF 重新运行。"
         )
     lines.append("- 文献检索范围限定高影响因子英文期刊，可能存在发表偏倚。")
     lines.append("- 最终临床解读需结合完整家族史、表型及实验验证。")
