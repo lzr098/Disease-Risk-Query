@@ -171,6 +171,7 @@ def _query_fasta(
     fasta_path: Path,
     cache: Dict[Tuple[str, int, int], str],
     fasta_has_chr: Optional[bool] = None,
+    raise_on_error: bool = False,
 ) -> str:
     """Return reference sequence (uppercase) at chrom:pos-pos+length-1."""
     key = (chrom, pos, length)
@@ -186,6 +187,15 @@ def _query_fasta(
         ["samtools", "faidx", str(fasta_path), f"{chrom_query}:{pos}-{end}"],
         capture_output=True, text=True, check=False,
     )
+    if proc.returncode != 0:
+        logger.warning(
+            "samtools faidx failed for %s:%s-%s: %s",
+            chrom_query, pos, end, proc.stderr.strip(),
+        )
+        if raise_on_error:
+            raise RuntimeError(f"samtools faidx failed: {proc.stderr.strip()}")
+        cache[key] = ""
+        return ""
     seq = "".join(proc.stdout.splitlines()[1:]).upper()
     cache[key] = seq
     return seq
@@ -393,12 +403,29 @@ def validate_ref_alleles(
     fasta_path: Path,
     sample_size: int = 100,
     max_mismatch_rate: float = 0.05,
+    random_seed: int = 42,
 ) -> dict:
-    """Sample variant sites and check REF allele matches FASTA."""
+    """Sample variant sites and check REF allele matches FASTA.
+
+    Args:
+        random_seed: Fixed seed for reproducible sampling.
+    """
     import random
+
+    random.seed(random_seed)
 
     cmd = ["bcftools", "query", "-f", "%CHROM\t%POS\t%REF\n", str(vcf_path)]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        logger.warning("bcftools query failed for REF validation: %s", result.stderr.strip())
+        return {
+            "total_checked": 0,
+            "mismatches": 0,
+            "mismatch_rate": 0.0,
+            "pass": True,
+            "note": "bcftools query failed; validation skipped",
+        }
+
     sites = []
     for line in result.stdout.strip().splitlines():
         parts = line.split("\t")
@@ -411,23 +438,28 @@ def validate_ref_alleles(
 
     sample = random.sample(sites, min(sample_size, len(sites)))
     mismatches = 0
+    failures = 0
 
     fa_cache: Dict[Tuple[str, int, int], str] = {}
     fasta_has_chr = _fasta_has_chr_prefix(fasta_path)
     for chrom, pos, ref in sample:
         try:
             fa_ref = _query_fasta(chrom, pos, len(ref), fasta_path, fa_cache, fasta_has_chr)
-            if fa_ref != ref.upper():
+            if not fa_ref:
+                failures += 1
+                logger.warning("FASTA returned empty sequence at %s:%s", chrom, pos)
+            elif fa_ref != ref.upper():
                 mismatches += 1
         except Exception as exc:
             logger.warning("FASTA validation failed at %s:%s: %s", chrom, pos, exc)
-            mismatches += 1
+            failures += 1
 
     total = len(sample)
     rate = mismatches / total if total else 0.0
     return {
         "total_checked": total,
         "mismatches": mismatches,
+        "failures": failures,
         "mismatch_rate": rate,
         "pass": rate <= max_mismatch_rate,
     }

@@ -119,12 +119,23 @@ def check_vcf_completeness(
         presence_rate = present / total if total else 0.0
         is_filtered = presence_rate < VCF_COMMON_SNP_PRESENCE_THRESHOLD
 
-        # Total variant count (approximate)
-        count_proc = subprocess.run(
-            ["bcftools", "view", "-H", str(vcf_path)],
+        # Total variant count: prefer index, fall back to line count
+        total_variants = None
+        idx_proc = subprocess.run(
+            ["bcftools", "index", "-n", str(vcf_path)],
             capture_output=True, text=True, check=False,
         )
-        total_variants = count_proc.stdout.count("\n")
+        if idx_proc.returncode == 0:
+            try:
+                total_variants = int(idx_proc.stdout.strip())
+            except ValueError:
+                total_variants = None
+        if total_variants is None:
+            count_proc = subprocess.run(
+                ["bcftools", "view", "-H", str(vcf_path)],
+                capture_output=True, text=True, check=False,
+            )
+            total_variants = count_proc.stdout.count("\n")
 
         return {
             "checked": True,
@@ -136,7 +147,8 @@ def check_vcf_completeness(
             "threshold": VCF_COMMON_SNP_PRESENCE_THRESHOLD,
             "note": (
                 f"{present}/{total} anchor positions present ({presence_rate:.0%}); "
-                f"flagged as filtered" if is_filtered else "pass"
+                f"common variants filtered; missing anchors treated as REF/REF"
+                if is_filtered else "pass"
             ),
         }
     finally:
@@ -217,9 +229,10 @@ def build_gene_bed(
     genes: list[str],
     output_bed: Path,
     gtf_path: Path = GENCODE_GTF,
+    coords_cache: Optional[dict] = None,
 ) -> Path:
     """Create a BED file covering all intervals for the requested genes."""
-    cache = build_gene_coordinates_cache(gtf_path)
+    cache = coords_cache if coords_cache is not None else build_gene_coordinates_cache(gtf_path)
     output_bed.parent.mkdir(parents=True, exist_ok=True)
     with open(output_bed, "w", encoding="utf-8") as f:
         written_genes = set()
@@ -251,11 +264,14 @@ def filter_vcf_by_gene_set(
 
     Returns dict with paths and counts.
     """
+    # Load gene coordinates once and reuse for BED building and stats
+    coords_cache = build_gene_coordinates_cache(gtf_path)
+
     tmp_dir = Path(tempfile.mkdtemp(prefix="drq_filter_"))
     try:
         # Build gene BED
         gene_bed = tmp_dir / "genes.bed"
-        build_gene_bed(genes, gene_bed, gtf_path)
+        build_gene_bed(genes, gene_bed, gtf_path, coords_cache=coords_cache)
 
         # Normalize chromosome style to match VCF
         vcf_style = _detect_vcf_chrom_style(input_vcf)
@@ -365,7 +381,7 @@ def filter_vcf_by_gene_set(
             "region_variants": region_count,
             "clinvar_variants": clinvar_count,
             "total_variants": total_count,
-            "genes_with_coords": len(set(genes) & set(build_gene_coordinates_cache(gtf_path).keys())),
+            "genes_with_coords": len(set(genes) & set(coords_cache.keys())),
         }
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)

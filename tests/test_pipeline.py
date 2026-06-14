@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -206,6 +207,76 @@ def test_resolve_disease_mode_unknown_disease():
     assert resolve_disease_mode("hypertension") == DISEASE_MODE_COMPLEX
     # Unknown disease without complex keyword defaults to mendelian
     assert resolve_disease_mode("foobar syndrome") == DISEASE_MODE_MENDELIAN
+
+
+def test_batch_gwas_lead_snp_query_matches_individual():
+    """Batch GWAS query must return the same genotypes as the legacy per-SNP query."""
+    from gwas_source import _batch_query_vcf_positions, _match_record
+
+    header = [
+        "##fileformat=VCFv4.2",
+        "##reference=GRCh38",
+        "##contig=<ID=chr21,length=46709983>",
+        '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE",
+    ]
+    records = [
+        "chr21\t25891784\t.\tC\tA\t99\tPASS\t.\tGT\t0/1",
+        "chr21\t25891785\t.\tG\tT\t99\tPASS\t.\tGT\t1/1",
+    ]
+    with tempfile.TemporaryDirectory() as tmp:
+        raw = Path(tmp) / "in.vcf"
+        src = Path(tmp) / "in.vcf.gz"
+        with open(raw, "w") as f:
+            for line in header:
+                f.write(line + "\n")
+            for line in records:
+                f.write(line + "\n")
+        # bcftools view -R requires a BGZF-compressed, indexed VCF
+        subprocess.run(["bcftools", "view", "-Oz", "-o", str(src), str(raw)], check=True)
+        subprocess.run(["bcftools", "index", str(src)], check=True)
+        result = _batch_query_vcf_positions(src, [("chr21", 25891784), ("chr21", 25891785)])
+        assert len(result) == 2
+        rec = _match_record(result["21:25891784"], ref="C", alt="A")
+        assert rec is not None
+        assert rec["gt"] == "0/1"
+        rec2 = _match_record(result["21:25891785"], ref="G", alt="T")
+        assert rec2 is not None
+        assert rec2["gt"] == "1/1"
+
+
+def test_batch_clinvar_annotation():
+    """Batch ClinVar annotation should annotate multiple variants in one query."""
+    from clinvar_phenotype_matcher import _batch_annotate_clinvar
+
+    # Use real ClinVar VCF if available; otherwise skip
+    from constants import CLINVAR_VCF
+    if not CLINVAR_VCF.exists():
+        pytest.skip("ClinVar VCF not available")
+
+    variants = [
+        {"CHROM": "chr12", "POS": 6019487, "REF": "G", "ALT": "A", "GENE": "VWF"},
+    ]
+    annotations = _batch_annotate_clinvar(variants)
+    key = "12:6019487:G:A"
+    assert key in annotations
+    assert len(annotations[key]["clinvar_diseases"]) > 0
+
+
+def test_cli_no_gwas_no_literature_flags():
+    """--no-gwas and --no-literature should be parsed into PipelineConfig."""
+    from main import _build_parser
+    from pipeline import PipelineConfig
+
+    parser = _build_parser()
+    args = parser.parse_args([
+        "--vcf", "/tmp/fake.vcf.gz",
+        "--disease", "Alzheimer disease",
+        "--no-gwas",
+        "--no-literature",
+    ])
+    assert args.no_gwas is True
+    assert args.no_literature is True
 
 
 if __name__ == "__main__":

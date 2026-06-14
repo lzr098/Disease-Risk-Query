@@ -33,7 +33,6 @@ from constants import (
     TIER1_HOM_PURE_LOF_BONUS,
     TIER2_BASE,
     TIER2_MULTIHIT_BONUS,
-    VCF_GWAS_DOWNWEIGHT_IF_FILTERED,
     WEIGHT_LITERATURE,
     WEIGHT_RARITY,
     WEIGHT_SEX_AGE,
@@ -174,7 +173,11 @@ def score_variants(
 
     # Rarity component: use lowest AF among tier1/2 variants
     all_scored = tier1 + tier2
-    afs = [_gnomad_af(v) for v in all_scored if _gnomad_af(v) is not None]
+    afs = []
+    for v in all_scored:
+        af = _gnomad_af(v)
+        if af is not None:
+            afs.append(af)
     min_af = min(afs) if afs else None
     if min_af is None:
         rarity_score = WEIGHT_RARITY  # conservative: assume rare
@@ -322,11 +325,14 @@ def score_rare_functional_variants(
         if chrom and pos:
             lit_variant_set.add(f"{chrom}:{pos}:{ref}:{alt}")
 
+    core_genes_upper = {g.upper() for g in core_genes}
+    lit_genes_upper = {g.upper() for g in literature_genes}
+
     details = []
     total = 0.0
     for v in variants:
         gene = _variant_gene(v)
-        if gene.upper() not in {g.upper() for g in core_genes}:
+        if gene.upper() not in core_genes_upper:
             continue
         if _is_likely_benign_clinvar(v):
             continue
@@ -372,7 +378,7 @@ def score_rare_functional_variants(
         if v_key in lit_variant_set:
             points += COMPLEX_LIT_VARIANT_BONUS
             notes.append("literature_variant")
-        elif gene.upper() in {g.upper() for g in literature_genes}:
+        elif gene.upper() in lit_genes_upper:
             points += COMPLEX_LIT_GENE_BONUS
             notes.append("literature_gene")
 
@@ -399,14 +405,32 @@ def score_rare_functional_variants(
     }
 
 
+def _allele_dosage(genotype: str, allele_index: int) -> int:
+    """Return the dosage of a specific allele index in a VCF genotype string."""
+    if not genotype or genotype in {"./.", ".|.", "", "?/?"}:
+        return -1
+    counts = 0
+    for allele in genotype.replace("|", "/").split("/"):
+        try:
+            if int(allele) == allele_index:
+                counts += 1
+        except ValueError:
+            return -1
+    return counts
+
+
 def score_gwas_contributions(
     gwas_lead_snps: list[dict],
     snp_contribution_map: Optional[dict[str, float]] = None,
 ) -> dict:
     """Score direct GWAS lead SNP genotypes for complex traits.
 
-    If snp_contribution_map is provided, each hit is weighted by the SNP's
-    contribution_score (or abs(beta) when available) instead of flat points.
+    Uses the GWAS effect allele and beta sign to determine the risk allele:
+    - If beta > 0 or beta is None, the effect allele is treated as the risk allele.
+    - If beta < 0, the other allele is treated as the risk allele (effect allele is protective).
+
+    The risk allele is then matched against the VCF REF/ALT alleles to compute dosage.
+    REF/REF can be high-risk or low-risk depending on which allele is the risk allele.
     Heterozygous risk allele uses full weight; homozygous doubles it.
     Capped at COMPLEX_GWAS_MAX_POINTS.
     """
@@ -419,18 +443,38 @@ def score_gwas_contributions(
         if not genotype:
             continue
         rsid = s.get("rsid", "")
-        # Dosage
-        if genotype in {"1/1", "1|1"}:
-            dosage = 2
-        elif genotype in {"0/1", "0|1", "1/0", "1|0"}:
-            dosage = 1
+        ref = gt.get("ref", s.get("ref", "")).upper()
+        alt = gt.get("alt", s.get("alt", "")).upper()
+        effect_allele = (s.get("effect_allele") or "").upper()
+        other_allele = (s.get("other_allele") or "").upper()
+        beta = s.get("beta")
+
+        # Determine risk allele from effect allele and beta sign
+        if beta is not None and beta < 0:
+            # Effect allele is protective; risk allele is the other allele
+            risk_allele = other_allele if other_allele else effect_allele
         else:
+            risk_allele = effect_allele
+
+        if not risk_allele or not ref or not alt:
+            continue
+
+        # Map risk allele to VCF allele index
+        if risk_allele == ref:
+            risk_index = 0
+        elif risk_allele == alt:
+            risk_index = 1
+        else:
+            # Risk allele does not match REF or ALT; skip
+            continue
+
+        dosage = _allele_dosage(genotype, risk_index)
+        if dosage < 0:
             continue
 
         # Weighted contribution from template
         weight = snp_contribution_map.get(rsid)
         if weight is None:
-            beta = s.get("beta")
             if beta is not None:
                 weight = min(0.30, max(0.03, abs(beta) * 1.2))
             else:
@@ -443,6 +487,10 @@ def score_gwas_contributions(
             "chrom": gt.get("chrom"),
             "pos": gt.get("pos"),
             "gt": genotype,
+            "ref": ref,
+            "alt": alt,
+            "risk_allele": risk_allele,
+            "risk_index": risk_index,
             "dosage": dosage,
             "snp_weight": round(weight, 3),
             "points": round(points, 2),
@@ -476,6 +524,8 @@ def score_literature_contributions(
         if chrom and pos:
             lit_variant_set.add(f"{chrom}:{pos}:{ref}:{alt}")
 
+    lit_genes_upper = {g.upper() for g in literature_genes}
+
     total = 0.0
     details = []
     for v in tier1 + tier2 + tier3:
@@ -484,7 +534,7 @@ def score_literature_contributions(
         if v_key in lit_variant_set:
             total += COMPLEX_LIT_VARIANT_BONUS
             details.append({"gene": gene, "variant": v_key, "type": "variant", "points": COMPLEX_LIT_VARIANT_BONUS})
-        elif gene.upper() in {g.upper() for g in literature_genes}:
+        elif gene.upper() in lit_genes_upper:
             total += COMPLEX_LIT_GENE_BONUS
             details.append({"gene": gene, "variant": v_key, "type": "gene", "points": COMPLEX_LIT_GENE_BONUS})
 
@@ -582,9 +632,9 @@ def calculate_contribution_score(
     Returns a structured result with per-dimension and per-variant contributions,
     suitable for reporting "how much might genetics contribute to this phenotype".
 
-    If the VCF appears to have been hard-filtered for common variants (low
-    presence rate of GWAS anchor SNPs), the GWAS dimension is downweighted and
-    the total is rescaled so that scores remain comparable across VCF types.
+    All missing GWAS lead SNPs are treated as REF/REF (0/0) per the project
+    convention; the GWAS dimension is evaluated at its full weight regardless
+    of VCF filtering status.
     """
     gwas_lead_snps = gwas_lead_snps or []
     vcf_qc = vcf_qc or {}
@@ -604,39 +654,18 @@ def calculate_contribution_score(
     )
     rarity = score_rarity_contribution(tier1 + tier2 + tier3)
 
-    # Adjust GWAS dimension if VCF appears to have filtered common variants
-    gwas_adjustment = None
-    if vcf_qc.get("common_variants_filtered"):
-        effective_gwas_weight = COMPLEX_WEIGHT_GWAS_COMMON * VCF_GWAS_DOWNWEIGHT_IF_FILTERED
-        original_gwas_score = gwas["score"]
-        gwas["original_score"] = original_gwas_score
-        gwas["score"] = round(min(effective_gwas_weight, original_gwas_score), 1)
-        unassessed_gwas = round(COMPLEX_WEIGHT_GWAS_COMMON - effective_gwas_weight, 1)
-        gwas_adjustment = {
-            "downweight_factor": VCF_GWAS_DOWNWEIGHT_IF_FILTERED,
-            "effective_gwas_weight": round(effective_gwas_weight, 1),
-            "unassessed_gwas_weight": unassessed_gwas,
-            "presence_rate": vcf_qc.get("presence_rate", 0.0),
-            "note": (
-                f"VCF 疑似过滤常见变异（锚定位点检出率 {vcf_qc.get('presence_rate', 0):.0%}），"
-                f"GWAS 维度按 {VCF_GWAS_DOWNWEIGHT_IF_FILTERED:.0%} 折算，"
-                f"{unassessed_gwas} 分标记为未评估。"
-            ),
-        }
-        gwas["adjustment"] = gwas_adjustment
+    # Per-project convention: missing GWAS lead SNPs are REF/REF, so the GWAS
+    # dimension keeps its full weight even when the VCF has been filtered.
+    unassessed = 0.0
+    effective_max = 100.0
 
-    unassessed = gwas_adjustment["unassessed_gwas_weight"] if gwas_adjustment else 0.0
-    effective_max = 100.0 - unassessed
-
-    raw_total = (
+    total = (
         monogenic["score"]
         + rare["score"]
         + gwas["score"]
         + lit["score"]
         + rarity["score"]
     )
-    # Rescale to 0-100 so scores remain comparable across filtered/unfiltered VCFs
-    total = raw_total * (100.0 / effective_max) if effective_max > 0 else raw_total
     total = min(100.0, max(0.0, total))
 
     if total >= CONTRIBUTION_HIGH_THRESHOLD:
@@ -673,9 +702,4 @@ def calculate_contribution_score(
             "min_gnomad_af": rarity["min_gnomad_af"],
         },
     }
-    if gwas_adjustment:
-        result["gwas_adjustment"] = gwas_adjustment
-        result["unassessed_weight"] = unassessed
-        result["raw_total_before_rescale"] = round(raw_total, 1)
-        result["components"]["gwas_original_score"] = gwas.get("original_score", gwas["score"])
     return result

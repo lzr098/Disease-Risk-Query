@@ -19,6 +19,7 @@ import json
 import logging
 import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -102,8 +103,13 @@ def _build_clinvar_variant_bed(
     keywords = disease_keywords(lookup_name)
     # Drop empty/whitespace-only normalized keywords to avoid false positives.
     keywords = [kw for kw in keywords if _normalize(kw)]
+    # Pre-filter to P/LP records only to avoid parsing the entire ClinVar VCF.
     proc = subprocess.run(
-        ["bcftools", "view", "-H", str(vcf_path)],
+        [
+            "bcftools", "view", "-H",
+            '-i', 'CLNSIG~"pathogenic" || CLNSIG~"likely_pathogenic"',
+            str(vcf_path),
+        ],
         capture_output=True, text=True, check=False,
     )
     seen: set[str] = set()
@@ -117,13 +123,6 @@ def _build_clinvar_variant_bed(
                 continue
             chrom, pos, _id, ref, alt, qual, filt, info = parts[:8]
 
-            m = re.search(r"CLNSIG=([^;]+)", info)
-            if not m:
-                continue
-            sig = m.group(1).lower()
-            if not any(s in sig for s in ("pathogenic", "likely_pathogenic")):
-                continue
-
             # Phenotype match
             norm_info = re.sub(r"[^a-z0-9 ]+", " ", info.lower())
             matched = False
@@ -134,6 +133,8 @@ def _build_clinvar_variant_bed(
             if not matched:
                 continue
 
+            m = re.search(r"CLNSIG=([^;]+)", info)
+            sig = m.group(1).lower() if m else "pathogenic"
             start = int(pos) - 1
             end = start + len(ref)
             for a in alt.split(","):
@@ -264,7 +265,7 @@ class DiseaseReference:
         metadata = {
             "disease_name": self.disease_name,
             "key": self.key,
-            "created": subprocess.check_output(["date", "-Iseconds"]).decode().strip(),
+            "created": datetime.now(timezone.utc).isoformat(),
             "source": "builtin" if builtin else "generated",
             "counts": {
                 "core_genes": len(core_genes),

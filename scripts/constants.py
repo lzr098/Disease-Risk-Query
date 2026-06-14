@@ -134,15 +134,6 @@ DISEASE_MODE_COMPLEX = "complex"
 DISEASE_MODE_AUTO = "auto"
 DEFAULT_DISEASE_MODE = DISEASE_MODE_AUTO
 
-# APOE GRCh38 coordinates for Alzheimer risk assessment (1-based inclusive)
-APOE_GRCH38 = {
-    "chrom": "chr19",
-    "start": 44908637,
-    "end": 44912685,
-    "rs7412": {"pos": 44908684, "ref": "T", "alt": "C"},  # ε2 risk / ε4 protective
-    "rs429358": {"pos": 44908822, "ref": "C", "alt": "T"},  # ε4 risk
-}
-
 # Alzheimer disease gene tiers.
 # Mendelian / high-effect familial genes get strict filtering and highest priority.
 AD_MENDELIAN_CORE_GENES = frozenset({
@@ -260,6 +251,8 @@ DISEASE_BUILTIN_REFS: dict[str, dict] = {
             {"gene": "UNC5C", "tier": "strong_gwas", "contribution_score": 0.3, "penetrance": "very_low", "penetrance_score": 0.05, "evidence": "gwas", "note": "多次GWAS验证的AD易感位点"},
             {"gene": "WNT3", "tier": "gwas", "contribution_score": 0.15, "penetrance": "very_low", "penetrance_score": 0.05, "evidence": "gwas", "note": "PGS004863 / Kunkle 2019 GWAS位点"},
         ],
+        "known_pathogenic_variants": [],
+        "prs_variants": [],
         "gwas_lead_snps": [
             {
                 "rsid": 'rs429358',
@@ -272,10 +265,12 @@ DISEASE_BUILTIN_REFS: dict[str, dict] = {
                 "or": None,
                 "eaf_eur": 0.14,
                 "eaf_eas": 0.09,
+                "variant_class": "dosage_risk",
                 "tier": 'high_effect',
                 "contribution_score": 0.5,
                 "confidence": 'high',
                 "note": 'APOE ε4 tag; each ε4 allele increases LOAD risk ~3-fold',
+                "or": 3.0,
             },
             {
                 "rsid": 'rs7412',
@@ -285,13 +280,14 @@ DISEASE_BUILTIN_REFS: dict[str, dict] = {
                 "effect_allele": 'C',
                 "other_allele": 'T',
                 "beta": None,
-                "or": None,
+                "or": 0.6,
                 "eaf_eur": 0.07,
                 "eaf_eas": 0.01,
+                "variant_class": "dosage_risk",
                 "tier": 'high_effect',
                 "contribution_score": 0.15,
                 "confidence": 'high',
-                "note": 'APOE ε2 tag; protective',
+                "note": 'APOE ε2 tag; associated with reduced risk',
             },
             {
                 "rsid": 'rs75932628',
@@ -1631,6 +1627,8 @@ DISEASE_BUILTIN_REFS: dict[str, dict] = {
             {"gene": "TMEM175", "tier": "strong_gwas", "contribution_score": 0.3, "penetrance": "very_low", "penetrance_score": 0.05, "evidence": "gwas", "note": "PD GWAS位点"},
             {"gene": "UBQLN4", "tier": "strong_gwas", "contribution_score": 0.3, "penetrance": "very_low", "penetrance_score": 0.05, "evidence": "gwas", "note": "PD GWAS位点"}
         ],
+        "known_pathogenic_variants": [],
+        "prs_variants": [],
         "gwas_lead_snps": [
             {
                 "rsid": 'rs34637584',
@@ -2474,6 +2472,8 @@ DISEASE_BUILTIN_REFS: dict[str, dict] = {
             {"gene": "ZNF385B", "tier": "gwas", "contribution_score": 0.2, "penetrance": "very_low", "penetrance_score": 0.05, "evidence": "gwas", "note": "近视/屈光不正GWAS位点"},
             {"gene": "ZNF644", "tier": "gwas", "contribution_score": 0.2, "penetrance": "very_low", "penetrance_score": 0.05, "evidence": "gwas", "note": "近视/屈光不正GWAS位点"}
         ],
+        "known_pathogenic_variants": [],
+        "prs_variants": [],
         "gwas_lead_snps": [
             {
                 "rsid": 'rs10033900',
@@ -3510,6 +3510,136 @@ DISEASE_BUILTIN_REFS: dict[str, dict] = {
             {"gene": "UMOD", "tier": "mendelian_mod", "contribution_score": 0.7, "penetrance": "high", "penetrance_score": 0.3, "evidence": "mixed", "note": "单基因高尿酸血症/肾结石/代谢综合征相关"},
             {"gene": "XDH", "tier": "mendelian_mod", "contribution_score": 0.7, "penetrance": "high", "penetrance_score": 0.3, "evidence": "mixed", "note": "单基因高尿酸血症/肾结石/代谢综合征相关"}
         ],
+        "known_pathogenic_variants": [],
+        "prs_variants": [],
+        "key_regions": {
+            "XDH": {
+                "note": "XDH/XO 是嘌呤降解限速酶，催化 hypoxanthine→xanthine 及 xanthine→uric acid；其 Mo-MPT 区域为别嘌醇/非布司他作用靶点。",
+                "regions": [
+                    {"name": "Fe-S_cluster_2", "residues": "113-150", "note": "2Fe-2S cluster binding (electron transfer)"},
+                    {"name": "FAD_binding", "residues": "229-414", "note": "FAD cofactor binding domain"},
+                    {"name": "Mo-MPT_substrate", "residues": "700-1100", "note": "Molybdopterin cofactor and purine substrate binding region"},
+                ],
+                "critical_residues": [
+                    {"residue": "Glu803", "note": "Substrate binding; Glu803Val strongly decreases xanthine/hypoxanthine activity"},
+                    {"residue": "Arg881", "note": "Substrate binding; Arg881Met abolishes xanthine oxidase activity"},
+                    {"residue": "Ala1080", "note": "Mo-MPT cofactor binding"},
+                    {"residue": "Glu1262", "note": "Active-site proton acceptor"},
+                ]
+            },
+            "SLC2A9": {
+                "note": "SLC2A9/GLUT9 是尿酸重吸收关键转运体（肝/肾），介导尿酸跨膜转运。",
+                "regions": [
+                    {"name": "MFS_transporter", "residues": "1-540", "note": "Major facilitator superfamily (12 TMs)"},
+                ],
+                "critical_residues": [
+                    {"residue": "Arg198", "note": "肾性低尿酸血症常见突变位点"},
+                    {"residue": "Arg380", "note": "肾性低尿酸血症常见突变位点"},
+                    {"residue": "Arg405", "note": "肾性低尿酸血症常见突变位点"},
+                ]
+            },
+            "ABCG2": {
+                "note": "ABCG2 是尿酸分泌型转运体，主要表达于肠道和肾小管；功能缺失降低肠道尿酸外排。",
+                "regions": [
+                    {"name": "TM1", "residues": "1-180", "note": "Transmembrane domain 1"},
+                    {"name": "NBD1", "residues": "181-390", "note": "Nucleotide-binding domain 1 (ATP binding)"},
+                    {"name": "TM2", "residues": "391-570", "note": "Transmembrane domain 2"},
+                    {"name": "NBD2", "residues": "571-655", "note": "Nucleotide-binding domain 2 (ATP binding)"},
+                ],
+                "critical_residues": [
+                    {"residue": "Gln141", "note": "Q141K 是东亚常见功能缺失多态，升高血清尿酸"},
+                ]
+            },
+            "SLC22A12": {
+                "note": "SLC22A12/URAT1 是肾小管尿酸重吸收的主要转运体，是苯溴马隆/丙磺舒靶点。",
+                "regions": [
+                    {"name": "MFS_transporter", "residues": "1-555", "note": "Major facilitator superfamily (12 TMs)"},
+                ],
+                "critical_residues": [
+                    {"residue": "Arg90", "note": "肾性低尿酸血症常见突变位点"},
+                    {"residue": "Trp258", "note": "底物结合/转运关键位点"},
+                ]
+            },
+            "SLC17A1": {
+                "note": "SLC17A1/NPT1 是肾脏尿酸分泌型磷酸盐转运体。",
+                "regions": [
+                    {"name": "MFS_transporter", "residues": "1-465", "note": "Major facilitator superfamily"},
+                ],
+                "critical_residues": []
+            },
+            "SLC17A3": {
+                "note": "SLC17A3/NPT4 是肾脏尿酸/阴离子分泌转运体。",
+                "regions": [
+                    {"name": "MFS_transporter", "residues": "1-466", "note": "Major facilitator superfamily"},
+                ],
+                "critical_residues": []
+            },
+            "HPRT1": {
+                "note": "HPRT1 是嘌呤补救合成关键酶；完全缺失导致 Lesch-Nyhan 综合征，部分缺失导致高尿酸血症。",
+                "regions": [
+                    {"name": "HPRT_Catalytic", "residues": "1-218", "note": "Hypoxanthine-guanine phosphoribosyltransferase catalytic domain"},
+                ],
+                "critical_residues": [
+                    {"residue": "Asp134", "note": "活性位点 Mg2+ 配位"},
+                    {"residue": "Arg169", "note": "5-磷酸核糖结合"},
+                ]
+            },
+            "PRPS1": {
+                "note": "PRPS1 催化 5-磷酸核糖-1-焦磷酸合成；功能增强导致嘌呤过量生成和高尿酸血症。",
+                "regions": [
+                    {"name": "PRPP_synthetase", "residues": "1-318", "note": "Ribose-phosphate pyrophosphokinase domain"},
+                ],
+                "critical_residues": [
+                    {"residue": "Asp128", "note": "活性位点"},
+                    {"residue": "Arg189", "note": "变构调节位点"},
+                ]
+            },
+            "UMOD": {
+                "note": "UMOD/尿调素突变导致肾小管间质疾病，常伴高尿酸血症和痛风。",
+                "regions": [
+                    {"name": "EGF_like", "residues": "28-340", "note": "EGF-like domains"},
+                    {"name": "D8C", "residues": "343-580", "note": "Cys-rich D8C domain"},
+                    {"name": "ZP", "residues": "585-640", "note": "Zona pellucida polymerization domain"},
+                ],
+                "critical_residues": [
+                    {"residue": "Cys148", "note": "常见 MCKD2 突变位点，影响二硫键形成"},
+                ]
+            },
+            "HNF1B": {
+                "note": "HNF1B 是肾发育和肾小管功能转录因子；突变导致肾囊肿糖尿病综合征，可合并高尿酸。",
+                "regions": [
+                    {"name": "POU_specific", "residues": "228-299", "note": "POU-specific DNA-binding domain"},
+                    {"name": "Homeobox", "residues": "300-363", "note": "Homeodomain DNA-binding domain"},
+                ],
+                "critical_residues": []
+            },
+            "AOX1": {
+                "note": "AOX1 是醛氧化酶，与 XDH 同属钼羟化酶家族，参与嘌呤/嘧啶代谢。",
+                "regions": [
+                    {"name": "Mo-MPT", "residues": "700-1100", "note": "Molybdopterin cofactor region (approximate)"},
+                ],
+                "critical_residues": []
+            },
+            "GCKR": {
+                "note": "GCKR 调节葡萄糖激酶活性，间接影响果糖/尿酸代谢。",
+                "regions": [
+                    {"name": "PISL", "residues": "1-625", "note": "Glucokinase regulatory protein domain"},
+                ],
+                "critical_residues": [
+                    {"residue": "Leu446", "note": "P446L 是常见功能多态，影响甘油三酯和尿酸"},
+                ]
+            },
+            "PDZK1": {
+                "note": "PDZK1 是尿酸转运体支架蛋白，调控 SLC22A12、SLC17A1 等在肾小管顶膜的表达。",
+                "regions": [
+                    {"name": "PDZ1", "residues": "7-90", "note": "PDZ domain 1"},
+                    {"name": "PDZ2", "residues": "97-180", "note": "PDZ domain 2"},
+                    {"name": "PDZ3", "residues": "187-270", "note": "PDZ domain 3"},
+                    {"name": "PDZ4", "residues": "277-360", "note": "PDZ domain 4"},
+                ],
+                "critical_residues": []
+            }
+        },
         "gwas_lead_snps": [
             {
                 "rsid": 'rs6447906',

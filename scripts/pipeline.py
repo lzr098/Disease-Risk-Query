@@ -1,38 +1,36 @@
-"""End-to-end disease risk query pipeline."""
+"""End-to-end disease risk query pipeline (DiseaseProfile-driven v0.11)."""
 
 from __future__ import annotations
 
 import json
 import logging
 import shutil
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from constants import (
-    AD_CORE_GENES,
-    AD_GWAS_LOCI_GENES,
-    AD_MENDELIAN_CORE_GENES,
     DEFAULT_DISEASE_MODE,
     DEFAULT_OUTPUT_DIR,
     GRCH38_FASTA,
-    resolve_builtin_disease_key,
     resolve_disease_mode,
 )
-from apoe_checker import check_apoe
-from clinvar_phenotype_matcher import filter_variants_by_clinvar_disease
+from clinvar_phenotype_matcher import (
+    enrich_variants_with_clinvar,
+    filter_variants_by_clinvar_disease,
+)
+from contribution_scorer import ContributionResult, score as score_contribution
+from disease_profile import DiseaseProfile
+from disease_profile_builder import build_or_load_profile
 from disease_reference import get_disease_reference
-from gene_set_builder import build_disease_gene_set
+from disease_space_query import query_disease_space
 from gpa_runner import run_gpa_on_filtered_vcf
-from gwas_source import annotate_gwas_hits, check_gwas_lead_snps, score_gwas_support
 from hpo_mapper import resolve_disease_query
-from literature_source import annotate_literature_support, score_literature_support
 from liftover import detect_genome_build, liftover_vcf, validate_ref_alleles
 from report import generate_report
-from risk_scorer import calculate_contribution_score, calculate_total_score, sex_age_bonus
 from tier_filters import denoise_tier3, remove_duplicate_variants
-from vcf_filter import check_vcf_completeness, filter_vcf_by_gene_set
+from variant_domain_dive import run_domain_dive_for_variants
+from vcf_filter import build_gene_coordinates_cache, check_vcf_completeness
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +55,8 @@ class PipelineConfig:
     literature_variants: Optional[list[dict]] = None
     refresh_cache: bool = False
     disease_mode: str = DEFAULT_DISEASE_MODE
+    gwas_enabled: bool = True
+    literature_enabled: bool = True
 
 
 def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
@@ -111,62 +111,35 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     vcf_qc = check_vcf_completeness(normalized_vcf, config.disease_query)
     logger.info("VCF QC: %s", vcf_qc)
 
-    # Step 2b: APOE genotype check (Alzheimer-specific)
-    apoe_result = None
-    canonical_key = resolve_builtin_disease_key(config.disease_query)
-    if canonical_key == "alzheimer disease" or "alzheimer" in config.disease_query.lower():
-        logger.info("Step 2b: Checking APOE genotype")
-        apoe_result = check_apoe(normalized_vcf)
-        logger.info("APOE result: %s", apoe_result)
-
-    # Step 2c: Direct check of known GWAS lead SNPs
-    logger.info("Step 2c: Checking known GWAS lead SNPs")
-    gwas_lead_snp_results = check_gwas_lead_snps(normalized_vcf, config.disease_query)
-    gwas_lead_hits = [s for s in gwas_lead_snp_results if s.get("sample_gt")]
-    logger.info("GWAS lead SNPs checked: %d, hits: %d", len(gwas_lead_snp_results), len(gwas_lead_hits))
-
-    # Step 3: Disease -> HPO
-    logger.info("Step 3: Mapping disease query to HPO")
+    # Step 2/3: Disease -> HPO and DiseaseProfile
+    logger.info("Step 2/3: Mapping disease query to HPO and building DiseaseProfile")
     hpo_result = resolve_disease_query(config.disease_query, config.hpo_id)
     hpo_id = hpo_result.get("hpo_id")
     hpo_name = hpo_result.get("hpo_name")
     if hpo_id is None:
-        logger.warning("No HPO mapping found for '%s'; proceeding with OMIM-only gene set", config.disease_query)
+        logger.warning("No HPO mapping found for '%s'; proceeding with OMIM/template only", config.disease_query)
 
-    # Step 3b: Load or build disease reference cache
-    logger.info("Step 3b: Loading disease reference cache")
-    disease_ref = get_disease_reference(config.disease_query, refresh=config.refresh_cache)
-    ref_core_genes = set(disease_ref.get("core_genes", []))
-    gene_contribution_map = disease_ref.get("gene_contribution_map", {})
-    snp_contribution_map = disease_ref.get("snp_contribution_map", {})
+    profile = build_or_load_profile(
+        config.disease_query,
+        hpo_id=hpo_id,
+        refresh=config.refresh_cache,
+    )
+    profile.to_json(work_dir / "profile.json")
     logger.info(
-        "Disease reference: %d core genes, %d literature entries, %d gene contributions, %d snp contributions",
-        len(ref_core_genes), len(disease_ref.get("literature", [])),
-        len(gene_contribution_map), len(snp_contribution_map),
+        "DiseaseProfile loaded: %d genes, %d known variants, %d regulatory regions, mode=%s",
+        len(profile.gene_set),
+        len(profile.all_known_variants),
+        len(profile.regulatory_regions),
+        profile.mode,
     )
 
-    # Step 4: Build disease gene set
-    logger.info("Step 4: Building disease gene set")
-    ref_gwas_loci = set(disease_ref.get("gwas_loci_genes", []))
-    core_genes = ref_core_genes if ref_core_genes else (AD_CORE_GENES if "alzheimer" in config.disease_query.lower() else set())
-    # Use Mendelian core for strict tier filtering; GWAS loci are informative but not relaxed
-    mendelian_core = ref_core_genes if ref_core_genes else (AD_MENDELIAN_CORE_GENES if "alzheimer" in config.disease_query.lower() else set())
-    # Core + GWAS loci from reference serve as literature-backed extra genes
-    extra_genes = sorted(set(config.literature_genes or []) | core_genes | ref_gwas_loci)
-    # OMIM titles/symbols are English-only; use the canonical English disease
-    # key for OMIM keyword search so Chinese queries still find OMIM entries.
-    omim_search_term = canonical_key or config.disease_query
-    gene_set_result = build_disease_gene_set(
-        disease_name=config.disease_query,
-        hpo_genes=hpo_result.get("genes") if hpo_id else [],
-        omim_keywords=[omim_search_term],
-        extra_genes=extra_genes,
-        max_genes=config.max_genes,
-        core_genes=core_genes,
-    )
-    gene_set_result["disease_reference"] = disease_ref
+    # Backward-compatible disease reference cache (for report/legacy fields)
+    disease_ref = get_disease_reference(config.disease_query, refresh=config.refresh_cache)
+    # Sync literature count with the dynamic profile literature
+    if isinstance(disease_ref, dict) and "metadata" in disease_ref and "counts" in disease_ref["metadata"]:
+        disease_ref["metadata"]["counts"]["literature_entries"] = len(profile.key_literature or [])
 
-    if not gene_set_result["merged_genes"]:
+    if not profile.gene_set:
         # No genes found; produce empty report
         report_path = work_dir / "report.md"
         empty_gpa = {
@@ -176,7 +149,16 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
             "multi_hit": [],
             "summary": {},
         }
-        empty_score = calculate_total_score([], [], [], [], set(), 0)
+        empty_contribution = ContributionResult(
+            overall_level="uncertain",
+            overall_score=None,
+        )
+        gene_set_result = {
+            "merged_genes": [],
+            "sources": {},
+            "total": 0,
+            "disease_reference": disease_ref,
+        }
         generate_report(
             disease_name=config.disease_query,
             hpo_id=hpo_id,
@@ -185,9 +167,9 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
             age=config.age,
             gene_set_result=gene_set_result,
             gpa_result=empty_gpa,
-            score_result=empty_score,
+            score_result=empty_contribution.to_dict(),
             output_path=report_path,
-            apoe_result=apoe_result,
+            apoe_result=None,
             vcf_qc=vcf_qc,
             disease_mode=disease_mode,
         )
@@ -195,30 +177,64 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
             "success": True,
             "hpo_id": hpo_id,
             "hpo_name": hpo_name,
+            "disease_profile": profile.to_dict(),
             "gene_set": gene_set_result,
             "gpa": empty_gpa,
-            "score": empty_score,
-            "apoe": apoe_result,
+            "contribution": empty_contribution.to_dict(),
+            "score": empty_contribution.to_dict(),
+            "apoe": None,
             "report_path": report_path,
             "work_dir": work_dir,
             "validation": validation,
             "note": "No disease-associated genes found in local databases.",
         }
 
-    # Step 5A: Filter VCF to disease gene regions
-    logger.info("Step 5A: Filtering VCF to %d disease genes", gene_set_result["total"])
-    filtered_vcf = work_dir / "filtered_disease_genes.vcf.gz"
-    filter_stats = filter_vcf_by_gene_set(
+    # Step 4: Unified disease-space query
+    logger.info("Step 4: Querying unified disease space")
+    gene_coords = build_gene_coordinates_cache()
+    space_result = query_disease_space(
         normalized_vcf,
-        filtered_vcf,
-        gene_set_result["merged_genes"],
-        clinvar_safetynet=True,
-        disease_name=config.disease_query,
+        profile,
+        gene_coords,
+        work_dir,
     )
-    logger.info("Filter stats: %s", filter_stats)
+    filtered_vcf = space_result["disease_space_vcf"]
+    known_genotypes = space_result["known_variant_genotypes"]
+    logger.info(
+        "Disease space variants: %d, known variants queried: %d",
+        space_result["variant_count"], len(known_genotypes),
+    )
 
-    # Step 5B: GPA tier classification
-    logger.info("Step 5B: Running GPA tier classification")
+    # Build legacy gene_set_result for report compatibility
+    hpo_genes = set(hpo_result.get("genes", [])) if hpo_id else set()
+    builtin_genes = {g.gene for g in profile.gene_set}
+    omim_only = set()
+    # OMIM-derived genes are those not from built-in template and not from HPO
+    # (heuristic; exact source depends on builder path)
+    hpo_only = hpo_genes - builtin_genes
+    extra_genes = set()
+    for g in profile.gene_set:
+        if g.evidence == "hpo_omim":
+            extra_genes.add(g.gene)
+        if g.evidence == "omim":
+            omim_only.add(g.gene)
+    omim_only = omim_only - builtin_genes - hpo_genes
+    extra_genes = extra_genes - builtin_genes - hpo_genes
+
+    gene_set_result = {
+        "merged_genes": sorted(profile.all_genes),
+        "sources": {
+            "omim": len(omim_only),
+            "hpo": len(hpo_only),
+            "extra": len(extra_genes),
+            "builtin": len(builtin_genes),
+        },
+        "total": len(profile.all_genes),
+        "disease_reference": disease_ref,
+    }
+
+    # Step 5A/B: GPA tier classification on disease-space VCF
+    logger.info("Step 5: Running GPA tier classification")
     progress_log = work_dir / "gpa_progress.jsonl"
     gpa_result = run_gpa_on_filtered_vcf(
         filtered_vcf=filtered_vcf,
@@ -237,15 +253,14 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
             "success": False,
             "error": gpa_result.get("error", "GPA analysis failed"),
             "hpo_id": hpo_id,
+            "hpo_name": hpo_name,
+            "disease_profile": profile.to_dict(),
             "gene_set": gene_set_result,
             "work_dir": work_dir,
         }
 
     # Step 5C: Post-GPA filtering
     logger.info("Step 5C: Post-GPA ClinVar phenotype matching and Tier 3 denoising")
-    # Tier 1 variants should also be required to match the disease phenotype in
-    # ClinVar; otherwise broad pathogenic variants in non-disease genes (e.g.
-    # VWF p.Gln1311Ter) are miscalled as Tier 1.
     tier1_before = len(gpa_result.get("tier1_variants", []))
     gpa_result["tier1_variants"] = filter_variants_by_clinvar_disease(
         gpa_result.get("tier1_variants", []),
@@ -273,75 +288,119 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     )
     gpa_result["tier3_variants"] = denoise_tier3(
         gpa_result["tier3_variants"],
-        core_genes=mendelian_core or AD_MENDELIAN_CORE_GENES,
-        gwas_loci_genes=ref_gwas_loci or AD_GWAS_LOCI_GENES,
+        core_genes=profile.core_genes,
+        gwas_loci_genes=profile.gwas_loci_genes,
     )
 
-    # Rebuild multi-hit from filtered tiers
+    # Step 5C-ter: Enrich all tiered variants with ClinVar annotations.
+    # This is informational only: P/LP is highlighted, but VUS/conflicting/etc.
+    # are not used to filter or downweight variants.
+    logger.info("Step 5C-ter: Enriching tiered variants with ClinVar annotations")
     all_tiered = (
         gpa_result.get("tier1_variants", [])
         + gpa_result.get("tier2_variants", [])
         + gpa_result.get("tier3_variants", [])
     )
+    enriched = enrich_variants_with_clinvar(all_tiered, config.disease_query)
+    # Split back into tiers preserving order
+    t1_n = len(gpa_result.get("tier1_variants", []))
+    t2_n = len(gpa_result.get("tier2_variants", []))
+    gpa_result["tier1_variants"] = enriched[:t1_n]
+    gpa_result["tier2_variants"] = enriched[t1_n:t1_n + t2_n]
+    gpa_result["tier3_variants"] = enriched[t1_n + t2_n:]
+    logger.info("ClinVar enrichment completed for %d variants", len(enriched))
+
+    # Step 5C-bis: Targeted domain-dive for Tier 2/3 variants in core genes
+    logger.info("Step 5C-bis: Running targeted domain-dive on Tier 2/3 candidates")
+    tier2_and_3 = (
+        gpa_result.get("tier2_variants", [])
+        + gpa_result.get("tier3_variants", [])
+    )
+    # Pass key_regions to domain dive via existing mechanism if available
+    domain_dive_candidates = run_domain_dive_for_variants(
+        tier2_and_3,
+        disease_name=config.disease_query,
+        min_tier=2,
+        max_tier=3,
+    )
+    gpa_result["domain_dive_candidates"] = domain_dive_candidates
+    logger.info("Domain-dive candidates: %d", len(domain_dive_candidates))
+
+    # Rebuild multi-hit from filtered tiers
     from collections import Counter
-    gene_counts = Counter(v.get("gene") or v.get("GENE") for v in all_tiered if (v.get("gene") or v.get("GENE")))
+    gene_counts = Counter(v.get("gene") or v.get("GENE") for v in (
+        gpa_result.get("tier1_variants", [])
+        + gpa_result.get("tier2_variants", [])
+        + gpa_result.get("tier3_variants", [])
+    ) if (v.get("gene") or v.get("GENE")))
     gpa_result["multi_hit"] = [
         {"gene": gene, "variant_count": count}
         for gene, count in gene_counts.items()
         if count > 1
     ]
 
-    # Step 5D: Annotate tiers with GWAS and literature evidence
-    logger.info("Step 5D: Annotating variants with GWAS and literature evidence")
-    annotate_gwas_hits(all_tiered, config.disease_query)
-    annotate_literature_support(all_tiered, config.disease_query)
-    gwas_summary = score_gwas_support(all_tiered, config.disease_query)
-    lit_summary = score_literature_support(all_tiered, config.disease_query, core_genes=mendelian_core)
-    logger.info("GWAS proximal variants: %d in genes %s", gwas_summary["hit_count"], gwas_summary["hit_genes"])
-    logger.info("Literature-supported variants: %d in genes %s", len(lit_summary["variant_hits"]), lit_summary["gene_hits"])
-
-    # Step 6: Composite risk scoring
-    logger.info("Step 6: Calculating composite %s score", disease_mode)
-    if disease_mode == "complex":
-        score_result = calculate_contribution_score(
-            tier1=gpa_result.get("tier1_variants", []),
-            tier2=gpa_result.get("tier2_variants", []),
-            tier3=gpa_result.get("tier3_variants", []),
-            core_genes=ref_core_genes,
-            gwas_lead_snps=gwas_lead_snp_results,
-            literature_variants=config.literature_variants,
-            literature_genes=set(config.literature_genes or []),
-            vcf_qc=vcf_qc,
-            gene_contribution_map=gene_contribution_map,
-            snp_contribution_map=snp_contribution_map,
-        )
-    else:
-        sab = sex_age_bonus(config.disease_query, config.sex, config.age, gene_set_result["merged_genes"])
-        multi_hit_genes = [
-            (m["gene"] if isinstance(m, dict) else m)
-            for m in gpa_result.get("multi_hit", [])
-        ]
-        score_result = calculate_total_score(
-            tier1=gpa_result.get("tier1_variants", []),
-            tier2=gpa_result.get("tier2_variants", []),
-            multi_hit_genes=multi_hit_genes,
-            literature_variants=config.literature_variants,
-            literature_genes=set(config.literature_genes or []),
-            sex_age_bonus=sab,
-            gene_contribution_map=gene_contribution_map,
-        )
+    # Step 6: Contribution scoring
+    logger.info("Step 6: Calculating disease contribution score")
+    contribution = score_contribution(
+        profile=profile,
+        tiered_variants={
+            "tier1_variants": gpa_result.get("tier1_variants", []),
+            "tier2_variants": gpa_result.get("tier2_variants", []),
+            "tier3_variants": gpa_result.get("tier3_variants", []),
+        },
+        known_genotypes=known_genotypes,
+        vcf_qc=vcf_qc,
+    )
+    score_result = contribution.to_dict()
+    # Backward-compatible report keys
+    score_result["total_score"] = round((contribution.overall_score or 0.0) * 100)
+    score_result["risk_level"] = contribution.overall_level
+    score_result["contribution_level"] = contribution.overall_level
+    score_result["risk_meaning"] = contribution.overall_level
+    score_result["contribution_meaning"] = contribution.overall_level
+    score_result["components"] = {
+        "tier1_score": round(sum(x["contribution"] for x in contribution.mendelian_high) * 100),
+        "tier2_score": round(sum(x["contribution"] for x in contribution.mendelian_mod) * 100),
+        "monogenic_score": round(sum(x["contribution"] for x in contribution.mendelian_high) * 100),
+        "rare_functional_score": round(sum(x["contribution"] for x in contribution.mendelian_mod) * 100),
+        "gwas_score": round(abs(contribution.gwas_prs.get("score", 0.0)) * 100),
+        "gwas_hits": contribution.gwas_prs.get("variants", []),
+        "literature_score": 0,
+        "rarity_score": 0.0,
+    }
+    logger.info(
+        "Contribution score: %.3f, level: %s",
+        score_result.get("overall_score") or 0,
+        score_result["overall_level"],
+    )
 
     # Apply literature/GWAS flags to variants for report
     for v in gpa_result.get("tier1_variants", []) + gpa_result.get("tier2_variants", []):
         flags = []
-        if v.get("literature_support"):
-            flags.append("LITERATURE_SUPPORTED")
-        if v.get("gwas_proximal"):
-            flags.append(f"GWAS_PROXIMAL:{v.get('nearest_gwas_snp')}")
+        gene = v.get("gene") or v.get("GENE") or ""
+        if gene in profile.gwas_loci_genes:
+            flags.append("GWAS_LOCUS")
+        v["_gene_contribution"] = profile.gene_contribution_map.get(gene)
+        v["_gene_penetrance"] = profile.gene_penetrance_map.get(gene)
         v["_drq_flags"] = flags
+
+    # Build literature summary from profile key_literature
+    literature_entries = profile.key_literature or []
+    literature_genes = set()
+    for entry in literature_entries:
+        for gene in entry.get("genes", []):
+            literature_genes.add(gene.upper())
+    literature_summary = {
+        "variant_hits": [],
+        "gene_hits": sorted(literature_genes),
+        "core_genes_covered": sorted(literature_genes & profile.core_genes),
+        "total_entries": len(literature_entries),
+        "entries": literature_entries,
+    }
 
     # Generate report
     report_path = work_dir / "report.md"
+    legacy_gwas_lead_snps = _known_genotypes_to_legacy_gwas(known_genotypes)
     generate_report(
         disease_name=config.disease_query,
         hpo_id=hpo_id,
@@ -351,14 +410,15 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         gene_set_result=gene_set_result,
         gpa_result=gpa_result,
         score_result=score_result,
-        apoe_result=apoe_result,
-        gwas_summary=gwas_summary,
-        literature_summary=lit_summary,
+        apoe_result=None,
+        gwas_summary={"hit_count": 0, "hit_genes": [], "top_variants": []},
+        literature_summary=literature_summary,
         disease_reference=disease_ref,
-        gwas_lead_snps=gwas_lead_snp_results,
+        gwas_lead_snps=legacy_gwas_lead_snps,
         vcf_qc=vcf_qc,
         output_path=report_path,
         disease_mode=disease_mode,
+        domain_dive_candidates=domain_dive_candidates,
     )
 
     # Save structured JSON
@@ -372,15 +432,24 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         "filtered_vcf": str(filtered_vcf),
         "genome_build": build,
         "validation": validation,
-        "apoe": apoe_result,
+        "apoe": None,
         "disease_mode": disease_mode,
+        "disease_profile": profile.to_dict(),
         "gene_set": gene_set_result,
-        "filter_stats": filter_stats,
+        "filter_stats": {
+            "input_variants": space_result["variant_count"],
+            "output_variants": space_result["variant_count"],
+            "gene_count": len(profile.all_genes),
+            "known_variant_count": len(known_genotypes),
+        },
         "gpa": gpa_result,
+        "contribution": contribution.to_dict(),
         "score": score_result,
-        "gwas_lead_snps": gwas_lead_snp_results,
-        "gwas_summary": gwas_summary,
-        "literature_summary": lit_summary,
+        "domain_dive_candidates": domain_dive_candidates,
+        "known_variant_genotypes": [g.to_dict() for g in known_genotypes],
+        "gwas_lead_snps": legacy_gwas_lead_snps,
+        "gwas_summary": {"hit_count": 0, "hit_genes": [], "top_variants": []},
+        "literature_summary": literature_summary,
         "disease_reference": disease_ref,
         "vcf_qc": vcf_qc,
         "report_path": str(report_path),
@@ -390,3 +459,34 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         json.dump(result, f, indent=2, ensure_ascii=False, default=str)
 
     return result
+
+
+def _known_genotypes_to_legacy_gwas(known_genotypes: list) -> list[dict]:
+    """Convert KnownVariantGenotype objects to legacy gwas_lead_snps format."""
+    results = []
+    for kg in known_genotypes:
+        v = kg.variant
+        results.append({
+            "rsid": v.rsid,
+            "gene": v.gene,
+            "chrom": kg.chrom,
+            "pos": kg.pos,
+            "ref": kg.ref,
+            "alt": kg.alt,
+            "effect_allele": v.effect_allele,
+            "beta": v.beta,
+            "or": v.or_value,
+            "contribution_score": v.contribution_score,
+            "sample_gt": {
+                "chrom": kg.chrom,
+                "pos": kg.pos,
+                "ref": kg.ref,
+                "alt": kg.alt,
+                "gt": kg.gt,
+                "filter": kg.filter_status,
+                "format": kg.sample_format,
+                "sample": kg.sample_values,
+            },
+            "note": v.note,
+        })
+    return results

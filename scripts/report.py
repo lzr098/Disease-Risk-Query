@@ -1,4 +1,9 @@
-"""Markdown report generation for disease risk query."""
+"""Markdown report generation for disease risk query.
+
+This module generates a structured, disease-contribution-focused report.
+It replaces the previous tier-centric layout with layered findings:
+high-penetrance / moderate-penetrance / dosage-risk / GWAS-PRS / regulatory.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,25 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from constants import COMPLEX_WEIGHT_GWAS_COMMON
+
+LEVEL_MEANING: dict[str, str] = {
+    "high": "高遗传贡献：当前可检出的遗传证据对该疾病解释力高",
+    "moderate": "中等遗传贡献：当前可检出的遗传证据对该疾病有一定解释力",
+    "low": "低遗传贡献：当前可检出的遗传证据有限，但存在潜在信号",
+    "very_low": "当前可检出的遗传证据对该疾病解释力很低",
+    "uncertain": "证据不足或无法评估",
+    "none": "该层级未发现相关变异",
+}
+
+
+_LAYER_LABELS = {
+    "mendelian_high": "高外显致病突变",
+    "mendelian_mod": "中等外显变异",
+    "dosage_risk": "剂量风险位点",
+    "gwas_prs": "GWAS / PRS 贡献",
+    "regulatory": "调控区罕见变异",
+    "clinvar_enriched": "ClinVar 注释变异",
+}
 
 
 def _get(v: dict, *keys: str) -> Any:
@@ -17,36 +40,153 @@ def _get(v: dict, *keys: str) -> Any:
     return ""
 
 
-def _variant_table_row(v: dict) -> str:
-    gene = _get(v, "GENE", "gene")
+def _variant_id(v: dict) -> str:
     chrom = _get(v, "CHROM", "chrom")
     pos = _get(v, "POS", "pos")
     ref = _get(v, "REF", "ref")
     alt = _get(v, "ALT", "alt")
-    hgvsp = _get(v, "HGVSp", "hgvsp", "primary_hgvsp")
-    hgvsc = _get(v, "HGVSc", "hgvsc", "primary_hgvsc")
-    clin_sig = _get(v, "CLIN_SIG", "clinvar")
-    impact = _get(v, "IMPACT", "impact", "primary_impact")
-    cons = _get(v, "Consequence", "consequence", "primary_consequence")
-    gt = _get(v, "GT", "gt")
-    gnomad = _get(v, "gnomAD_AF", "gnomad_af")
-    flag_parts = list(v.get("_drq_flags", []))
-    if v.get("gwas_proximal"):
-        flag_parts.append(f"GWAS:{v.get('nearest_gwas_snp', '')}")
-    if v.get("literature_support"):
-        flag_parts.append("LIT")
-    flags = ", ".join(flag_parts)
+    if chrom and pos and ref and alt:
+        return f"{chrom}:{pos}:{ref}>{alt}"
+    return v.get("variant") or ""
 
-    # Template-based contribution/penetrance annotations
-    gene_contrib = v.get("_gene_contribution")
-    gene_pen = v.get("_gene_penetrance")
+
+def _format_gt_status(inferred: bool, gt: str = "") -> str:
+    if inferred:
+        return "推断 ref/ref"
+    if gt in ("0/0", "0|0"):
+        return "样本检出 ref/ref"
+    return "样本检出"
+
+
+def _variant_table_row(v: dict, show_clinvar: bool = False) -> str:
+    # v may be a contribution wrapper with "raw" pointing to the GPA variant,
+    # or a raw GPA variant dict.
+    raw = v.get("raw", v)
+    gene = _get(raw, "GENE", "gene")
+    var_id = _variant_id(raw) or v.get("variant", "")
+    hgvsp = _get(raw, "HGVSp", "hgvsp", "primary_hgvsp")
+    hgvsc = _get(raw, "HGVSc", "hgvsc", "primary_hgvsc")
+    clin_sig = _get(raw, "clinvar_sig", "CLIN_SIG", "clinvar")
+    impact = _get(raw, "IMPACT", "impact", "primary_impact")
+    cons = _get(raw, "Consequence", "consequence", "primary_consequence")
+    gt = _get(raw, "GT", "gt", "zygosity")
+    gnomad = _get(raw, "gnomAD_AF", "gnomad_af")
+    flags = ", ".join(raw.get("_drq_flags", [])) or "-"
+
+    gene_contrib = raw.get("_gene_contribution")
+    gene_pen = raw.get("_gene_penetrance")
     contrib_str = f"{gene_contrib}" if gene_contrib is not None else "-"
-    pen_str = f"{gene_pen}" if gene_pen else "-"
+    pen_str = gene_pen or "-"
 
+    if show_clinvar:
+        return (
+            f"| {gene} | `{var_id}` | {hgvsc} | {hgvsp} | "
+            f"{clin_sig} | {impact}/{cons} | {gt} | {gnomad} | {contrib_str} | {pen_str} | {flags} |"
+        )
     return (
-        f"| {gene} | `{chrom}:{pos}:{ref}>{alt}` | {hgvsc} | {hgvsp} | "
-        f"{clin_sig} | {impact}/{cons} | {gt} | {gnomad} | {contrib_str} | {pen_str} | {flags} |"
+        f"| {gene} | `{var_id}` | {hgvsc} | {hgvsp} | "
+        f"{impact}/{cons} | {gt} | {gnomad} | {contrib_str} | {pen_str} | {flags} |"
     )
+
+
+def _known_variant_table_row(d: dict) -> str:
+    rsid = d.get("rsid") or "-"
+    gene = d.get("gene") or "-"
+    variant = d.get("variant") or "-"
+    risk_allele = d.get("risk_allele") or d.get("effect_allele") or "-"
+    dosage = d.get("dosage") if d.get("dosage") is not None else "-"
+    gt = d.get("gt") or "0/0"
+    status = _format_gt_status(d.get("inferred_ref_ref", False), gt)
+    or_val = d.get("or_per_allele") or d.get("or_value")
+    or_str = f"{or_val:.2f}" if isinstance(or_val, (int, float)) else "-"
+    beta = d.get("beta")
+    beta_str = f"{beta:.4f}" if isinstance(beta, (int, float)) else "-"
+    contrib = d.get("contribution")
+    contrib_str = f"{contrib:.3f}" if isinstance(contrib, (int, float)) else "-"
+    note = d.get("note", "")
+    return (
+        f"| {rsid} | {gene} | `{variant}` | {gt} | {status} | {risk_allele} | "
+        f"{dosage} | {or_str} | {beta_str} | {contrib_str} | {note} |"
+    )
+
+
+def _render_layer_table(layer: str, items: list[dict]) -> list[str]:
+    lines: list[str] = []
+    if not items:
+        lines.append("_未检出_")
+        return lines
+
+    if layer == "gwas_prs":
+        lines.append("| SNP | 基因 | 位点 | 基因型 | 来源 | 风险等位 | 剂量 | OR | beta | 贡献 | 说明 |")
+        lines.append("|-----|------|------|--------|------|----------|------|----|----|------|------|")
+        for d in items:
+            lines.append(_known_variant_table_row(d))
+    elif layer == "dosage_risk":
+        lines.append("| SNP | 基因 | 位点 | 基因型 | 来源 | 风险等位 | 剂量 | OR | beta | 贡献 | 说明 |")
+        lines.append("|-----|------|------|--------|------|----------|------|----|----|------|------|")
+        for d in items:
+            lines.append(_known_variant_table_row(d))
+    else:
+        lines.append("| 基因 | 位点 | cDNA | 蛋白 | ClinVar | 影响/类型 | 合子性 | gnomAD AF | 基因贡献 | 外显率 | 标志 |")
+        lines.append("|------|------|------|------|---------|-----------|--------|-----------|----------|--------|------|")
+        show_clinvar = layer in ("mendelian_high", "mendelian_mod", "clinvar_enriched")
+        for v in items:
+            lines.append(_variant_table_row(v, show_clinvar=show_clinvar))
+    return lines
+
+
+def _executive_summary(
+    score_result: dict,
+    contribution: dict,
+    known_genotypes: list[dict],
+) -> list[str]:
+    lines: list[str] = []
+    level = score_result.get("overall_level", "uncertain")
+    meaning = LEVEL_MEANING.get(level, level)
+    lines.append(f"- **总体评估**：{level} — {meaning}")
+
+    # Key findings
+    findings: list[str] = []
+    high = contribution.get("mendelian_high", [])
+    mod = contribution.get("mendelian_mod", [])
+    dosage = contribution.get("dosage_risk", [])
+    gwas = contribution.get("gwas_prs", {})
+
+    if high:
+        genes = sorted({h.get("gene", "") for h in high})
+        findings.append(f"发现高外显致病突变（{', '.join(genes)}）")
+    elif mod:
+        genes = sorted({m.get("gene", "") for m in mod})
+        findings.append(f"发现中等外显变异（{', '.join(genes)}）")
+
+    real_dosage = [d for d in dosage if not d.get("inferred_ref_ref")]
+    if real_dosage:
+        items = [f"{d.get('rsid')} (dosage={d.get('dosage')})" for d in real_dosage[:3]]
+        findings.append(f"剂量风险位点真实检出：{', '.join(items)}")
+
+    real_gwas = [v for v in gwas.get("variants", []) if not v.get("inferred_ref_ref")]
+    if real_gwas:
+        findings.append(f"GWAS/PRS 位点真实检出 {len(real_gwas)} 个")
+
+    if not findings:
+        findings.append("本次分析未发现明确的高外显致病突变或强风险等位基因")
+
+    # Mention inferred ref/ref count
+    inferred_known = [kg for kg in known_genotypes if kg.get("sample_gt", {}).get("inferred_ref_ref")]
+    if inferred_known:
+        findings.append(
+            f"{len(inferred_known)} 个已知风险位点未在 VCF 中保留，已按 ref/ref（0/0）推断"
+        )
+
+    for f in findings[:5]:
+        lines.append(f"- {f}")
+
+    lines.append("")
+    lines.append(
+        "> **注意**：未检出高外显致病突变不等于排除该疾病的遗传病因。"
+        "本报告仅反映当前 VCF 可检出的遗传证据。"
+    )
+    return lines
 
 
 def generate_report(
@@ -59,303 +199,236 @@ def generate_report(
     gpa_result: dict,
     score_result: dict,
     output_path: Path,
-    apoe_result: Optional[dict] = None,
+    apoe_result: Optional[dict] = None,  # deprecated, kept for compatibility
     gwas_summary: Optional[dict] = None,
     literature_summary: Optional[dict] = None,
     disease_reference: Optional[dict] = None,
     gwas_lead_snps: Optional[list[dict]] = None,
     vcf_qc: Optional[dict] = None,
     disease_mode: str = "mendelian",
+    domain_dive_candidates: Optional[list[dict]] = None,
 ) -> Path:
-    """Generate the final Markdown risk/contribution report."""
+    """Generate the final Markdown disease contribution report."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    is_complex = disease_mode == "complex"
+
+    contribution = score_result.get("contribution", score_result)
+    layer_levels = contribution.get("layer_levels", {})
 
     lines: list[str] = []
-    title = f"疾病遗传贡献度评估报告：{disease_name}" if is_complex else f"疾病风险查询报告：{disease_name}"
-    lines.append(f"# {title}")
+    lines.append(f"# 疾病遗传贡献度评估报告：{disease_name}")
     lines.append("")
-    lines.append("## 1. 查询摘要")
+
+    # 1. Executive summary
+    lines.append("## 1. 执行摘要")
+    lines.extend(_executive_summary(score_result, contribution, gwas_lead_snps or []))
+    lines.append("")
+
+    # 2. Query summary
+    lines.append("## 2. 查询与样本信息")
     lines.append(f"- **目标疾病**：{disease_name}")
-    lines.append(f"- **评估模式**：{'复杂表型遗传贡献度' if is_complex else '孟德尔/致病性风险'}")
+    lines.append(f"- **评估模式**：{disease_mode}")
     lines.append(f"- **HPO ID**：{hpo_id or 'N/A'} ({hpo_name or 'N/A'})")
     lines.append(f"- **样本性别**：{sex} | **年龄**：{age if age is not None else '未知'}")
-    lines.append(f"- **查询日期**：{datetime.now().isoformat(timespec='minutes')}")
+    lines.append(f"- **报告生成时间**：{datetime.now().isoformat(timespec='minutes')}")
     lines.append("")
+
     lines.append("### VCF 质量与完整性")
     if vcf_qc and vcf_qc.get("checked"):
         lines.append(
-            f"- **锚定位点检出率**：{vcf_qc.get('anchor_snps_present', 0)} / "
+            f"- **锚定位点真实检出率**：{vcf_qc.get('anchor_snps_present', 0)} / "
             f"{vcf_qc.get('anchor_snps_checked', 0)} "
             f"({vcf_qc.get('presence_rate', 0):.0%})"
         )
         lines.append(f"- **VCF 总变异数（近似）**：{vcf_qc.get('total_variants', 'N/A'):,}")
-        if vcf_qc.get("common_variants_filtered"):
+        if vcf_qc.get("common_variants_filtered") or vcf_qc.get("likely_filtered"):
             lines.append(
-                "- **⚠️ 常见变异过滤提示**：该 VCF 的锚定位点检出率低于阈值，"
+                "- **常见变异过滤提示**：该 VCF 的锚定位点真实检出率低于阈值，"
                 "说明常见 SNP 位点未在 VCF 中保留。对于已基因分型的 callset，"
-                "未保留的常见 SNP 可推断为 ref/ref（0/0），并非测序漏检；"
-                "复杂表型模式下 GWAS 维度已按此情况自动折算。"
+                "未保留的位点一律推断为 ref/ref（0/0）；GWAS/PRS 维度仍按完整权重评估，但可信度下降。"
             )
         else:
-            lines.append("- **VCF 完整性**：锚定位点检出率正常，GWAS 维度可正常评估。")
+            lines.append("- **VCF 完整性**：锚定位点真实检出率正常，GWAS/PRS 维度可正常评估。")
     else:
         lines.append(f"- **VCF QC**：{vcf_qc.get('note', '未执行') if vcf_qc else '未执行'}")
     lines.append("")
 
-    if apoe_result:
-        lines.append("## 2. APOE 基因型")
-        if apoe_result.get("present"):
-            lines.append(f"- **rs7412**：{apoe_result.get('rs7412_status')}")
-            lines.append(f"- **rs429358**：{apoe_result.get('rs429358_status')}")
-            inferred = apoe_result.get("inferred_allele") or "无法推断"
-            lines.append(f"- **推断 APOE 等位基因**：{inferred}")
-        else:
-            lines.append("- **APOE 位点未检出**：VCF 在 chr19:44,908,637-44,912,685 区域无变异记录。")
-        if apoe_result.get("warning"):
-            lines.append(f"- **提示**：{apoe_result['warning']}")
-        lines.append("")
-
-    lines.append("## 3. 关联基因集")
-    sources = gene_set_result.get("sources", {})
-    lines.append(f"- **数据库来源**：OMIM {sources.get('omim', 0)} 个，HPO {sources.get('hpo', 0)} 个")
-    lines.append(f"- **文献扩展**：{sources.get('extra', 0)} 个新基因")
-    lines.append(f"- **合并去重后基因总数**：{gene_set_result.get('total', 0)}")
-    lines.append("")
-    lines.append("**基因列表（前 30）**：")
-    genes = gene_set_result.get("merged_genes", [])
-    lines.append(", ".join(genes[:30]) + (" ..." if len(genes) > 30 else ""))
-    lines.append("")
-
-    tier1 = gpa_result.get("tier1_variants", [])
-    tier2 = gpa_result.get("tier2_variants", [])
-    tier3 = gpa_result.get("tier3_variants", [])
-    multi_hit = gpa_result.get("multi_hit", [])
-
-    # Enrich variants with template-based gene contribution / penetrance
-    gene_contribution_map = (disease_reference or {}).get("gene_contribution_map", {})
-    gene_penetrance_map = (disease_reference or {}).get("gene_penetrance_map", {})
-    for v in tier1 + tier2 + tier3:
-        gene = _get(v, "GENE", "gene")
-        if gene and gene in gene_contribution_map:
-            v["_gene_contribution"] = gene_contribution_map[gene]
-            v["_gene_penetrance"] = gene_penetrance_map.get(gene, "")
-
-    lines.append("## 4. 变异匹配结果")
-    lines.append("")
-    if is_complex:
-        lines.append(f"- **Tier 1（高外显率）**：{len(tier1)} 个")
-        lines.append(f"- **Tier 2（可能相关）**：{len(tier2)} 个")
-        lines.append(f"- **Tier 3（罕见功能 / 去噪后）**：{len(tier3)} 个")
-        lines.append("")
-        lines.append("> 在复杂表型模式下，Tier 仅表示变异置信度层级；最终解释以「遗传贡献度」为准。")
-        lines.append("")
-    else:
-        lines.append(f"### Tier 1（高置信度）— {len(tier1)} 个")
-        if tier1:
-            lines.append("| 基因 | 位点 | cDNA | 蛋白 | ClinVar | 影响/类型 | 合子性 | gnomAD AF | 基因贡献 | 外显率 | 标志 |")
-            lines.append("|------|------|------|------|---------|-----------|--------|-----------|----------|--------|------|")
-            for v in tier1:
-                lines.append(_variant_table_row(v))
-        else:
-            lines.append("_未检出_")
-        lines.append("")
-
-        lines.append(f"### Tier 2（可能相关）— {len(tier2)} 个")
-        if tier2:
-            lines.append("| 基因 | 位点 | cDNA | 蛋白 | ClinVar | 影响/类型 | 合子性 | gnomAD AF | 基因贡献 | 外显率 | 标志 |")
-            lines.append("|------|------|------|------|---------|-----------|--------|-----------|----------|--------|------|")
-            for v in tier2:
-                lines.append(_variant_table_row(v))
-        else:
-            lines.append("_未检出_")
-        lines.append("")
-
-    # Tier 3 table shown for both modes (often the only findings in complex traits)
-    tier_label = "Tier 3（弱证据 / 去噪后）" if not is_complex else "Tier 3（罕见功能变异 / 去噪后）"
-    lines.append(f"### {tier_label} — {len(tier3)} 个")
-    if tier3:
-        lines.append("| 基因 | 位点 | cDNA | 蛋白 | ClinVar | 影响/类型 | 合子性 | gnomAD AF | 基因贡献 | 外显率 | 标志 |")
-        lines.append("|------|------|------|------|---------|-----------|--------|-----------|----------|--------|------|")
-        for v in tier3:
-            lines.append(_variant_table_row(v))
-    else:
-        lines.append("_未检出_")
-    lines.append("")
-
-    if not is_complex:
-        lines.append("### Multi-hit 检测")
-        if multi_hit:
-            for item in multi_hit:
-                if isinstance(item, dict):
-                    gene = item.get("gene", "") or "(unknown gene)"
-                    count = item.get("variant_count", item.get("count", "?"))
-                    phase_result = item.get("phase_result", {})
-                    phase = phase_result.get("status", item.get("phase", "unknown"))
-                    lines.append(f"- **{gene}**：命中 {count} 个变异，相位状态：{phase}")
-                else:
-                    lines.append(f"- {item}")
-        else:
-            lines.append("_未检出同基因多个命中变异_")
-        lines.append("")
-
-    lines.append("## 5. GWAS 与文献证据")
+    # 3. Disease profile summary
+    lines.append("## 3. 疾病模板摘要")
     if disease_reference:
         meta = disease_reference.get("metadata", {})
-        lines.append(f"- **疾病参考缓存**：{meta.get('source', 'unknown')} / {meta.get('created', 'N/A')}")
         counts = meta.get("counts", {})
         lines.append(f"- **核心基因**：{counts.get('core_genes', 0)} 个")
         lines.append(f"- **已知 ClinVar 致病突变**：{counts.get('clinvar_variants', 0)} 个")
         lines.append(f"- **GWAS lead SNPs**：{counts.get('gwas_snps', 0)} 个")
         lines.append(f"- **关键文献条目**：{counts.get('literature_entries', 0)} 条")
+    sources = gene_set_result.get("sources", {})
+    lines.append(f"- **基因来源**：OMIM {sources.get('omim', 0)} 个，HPO {sources.get('hpo', 0)} 个，文献扩展 {sources.get('extra', 0)} 个")
+    lines.append(f"- **合并去重后基因总数**：{gene_set_result.get('total', 0)}")
+    genes = gene_set_result.get("merged_genes", [])
+    if genes:
+        lines.append(f"- **基因列表（前 30）**：{', '.join(genes[:30])}{' ...' if len(genes) > 30 else ''}")
     lines.append("")
 
-    if gwas_lead_snps:
-        lines.append("### GWAS lead SNP 直接检出")
-        hits = [s for s in gwas_lead_snps if s.get("sample_gt")]
-        if hits:
-            lines.append(f"- 在样本中直接检出的已知 GWAS lead SNP：**{len(hits)} / {len(gwas_lead_snps)}**")
-            lines.append("| SNP | 基因 | 位点 | 样本基因型 | 效应等位 | beta | OR | 贡献 | 说明 |")
-            lines.append("|-----|------|------|------------|----------|------|----|------|------|")
-            for s in hits:
-                gt = s["sample_gt"]
-                beta = s.get("beta")
-                or_val = s.get("or")
-                contrib = s.get("contribution_score")
-                beta_str = f"{beta:.4f}" if beta is not None else "-"
-                or_str = f"{or_val:.2f}" if or_val is not None else "-"
-                contrib_str = f"{contrib:.3f}" if contrib is not None else "-"
-                lines.append(
-                    f"| {s.get('rsid', '')} | {s.get('gene', '')} | "
-                    f"{gt.get('chrom', '')}:{gt.get('pos', '')} | {gt.get('gt', '')} | "
-                    f"{s.get('effect_allele', '')} | {beta_str} | {or_str} | {contrib_str} | {s.get('note', '')} |"
-                )
-        else:
-            lines.append(f"- 已知 GWAS lead SNP 均未在 VCF 中保留（共 {len(gwas_lead_snps)} 个）。")
-            lines.append("- 在已基因分型的 callset 中，未保留的常见 SNP 应推断为 ref/ref（0/0），而非漏检。")
-        lines.append("")
+    # Enrich variants with template-based gene contribution / penetrance
+    gene_contribution_map = (disease_reference or {}).get("gene_contribution_map", {})
+    gene_penetrance_map = (disease_reference or {}).get("gene_penetrance_map", {})
+    for v in (
+        gpa_result.get("tier1_variants", [])
+        + gpa_result.get("tier2_variants", [])
+        + gpa_result.get("tier3_variants", [])
+    ):
+        gene = _get(v, "GENE", "gene")
+        if gene and gene in gene_contribution_map:
+            v["_gene_contribution"] = gene_contribution_map[gene]
+            v["_gene_penetrance"] = gene_penetrance_map.get(gene, "")
 
-    if gwas_summary:
-        lines.append("### GWAS 位点覆盖（±500 kb）")
-        lines.append(f"- 本样本中落在 GWAS lead SNP ±500 kb 窗口内的变异：**{gwas_summary.get('hit_count', 0)} 个**")
-        hit_genes = gwas_summary.get("hit_genes", [])
-        if hit_genes:
-            lines.append(f"- 涉及 GWAS 基因：{', '.join(hit_genes)}")
-        else:
-            lines.append("- 未涉及已知 GWAS 基因座")
-        lines.append("")
+    # 4. Layered findings
+    lines.append("## 4. 分层发现")
+    lines.append("")
 
-    if literature_summary:
-        lines.append("### 关键文献支持")
-        lines.append(f"- 有文献支持的变异：**{len(literature_summary.get('variant_hits', []))} 个**")
-        lit_genes = literature_summary.get("gene_hits", [])
-        if lit_genes:
-            lines.append(f"- 涉及文献基因：{', '.join(lit_genes)}")
-        else:
-            lines.append("- 未涉及文献支持基因")
-        # List top PMIDs
-        seen_pmids = set()
-        for v in literature_summary.get("variant_hits", []):
-            for entry in v.get("literature_support", []):
-                pmid = entry.get("pmid")
-                if pmid and pmid not in seen_pmids:
-                    seen_pmids.add(pmid)
-                    title = entry.get("title", "")
-                    note = entry.get("note", "")
-                    lines.append(f"  - PMID:{pmid} — {note}")
-        lines.append("")
+    layer_order = ["mendelian_high", "mendelian_mod", "dosage_risk", "gwas_prs", "regulatory"]
+    raw_layer_items = {
+        "mendelian_high": contribution.get("mendelian_high", []),
+        "mendelian_mod": contribution.get("mendelian_mod", []),
+        "dosage_risk": contribution.get("dosage_risk", []),
+        "gwas_prs": contribution.get("gwas_prs", {}).get("variants", []),
+        "regulatory": contribution.get("regulatory", []),
+    }
+    # For GWAS/PRS, suppress all-ref/ref zero-contribution noise in the table,
+    # but keep the summary counts honest.
+    layer_items: dict[str, list[dict]] = {}
+    for layer in layer_order:
+        items = list(raw_layer_items[layer])
+        if layer == "gwas_prs":
+            items = [
+                x for x in items
+                if not x.get("inferred_ref_ref") or x.get("contribution", 0) != 0
+            ]
+        layer_items[layer] = items
 
-    comp = score_result.get("components", {})
-    if is_complex:
-        lines.append("## 6. 遗传贡献度评估")
-        total = score_result.get("total_score", 0)
-        level = score_result.get("contribution_level", "无明确遗传贡献")
-        meaning = score_result.get("contribution_meaning", "")
-        lines.append(f"- **遗传贡献度总分**：{total}/100")
-        lines.append(f"- **贡献度等级**：**{level}**")
-        lines.append(f"- **含义**：{meaning}")
+    layer_scores = {
+        "mendelian_high": sum(x.get("contribution", 0) for x in raw_layer_items["mendelian_high"]),
+        "mendelian_mod": sum(x.get("contribution", 0) for x in raw_layer_items["mendelian_mod"]),
+        "dosage_risk": sum(x.get("contribution", 0) for x in raw_layer_items["dosage_risk"]),
+        "gwas_prs": abs(contribution.get("gwas_prs", {}).get("score", 0.0)),
+        "regulatory": sum(x.get("contribution", 0) for x in raw_layer_items["regulatory"]),
+    }
+
+    section_counter = 1
+    for layer in layer_order:
+        label = _LAYER_LABELS[layer]
+        items = layer_items[layer]
+        raw_items = raw_layer_items[layer]
+        score = layer_scores[layer]
+        level = layer_levels.get(layer, "none")
+        real_count = sum(1 for x in raw_items if not x.get("inferred_ref_ref"))
+        inferred_count = len(raw_items) - real_count
+
+        lines.append(f"### 4.{section_counter} {label}")
+        section_counter += 1
+        lines.append(f"- **层级得分**：{score:.3f}")
+        lines.append(f"- **层级等级**：{level}（{LEVEL_MEANING.get(level, level)}）")
+        lines.append(f"- **真实检出**：{real_count} 个 | **推断 ref/ref**：{inferred_count} 个")
         lines.append("")
-        lines.append("**分数组成**：")
-        lines.append(f"- 高外显率单基因变异：{comp.get('monogenic_score', 0)} / 30")
-        lines.append(f"- 罕见功能变异：{comp.get('rare_functional_score', 0)} / 25")
-        gwas_adj = score_result.get("gwas_adjustment")
-        if gwas_adj:
+        if layer in ("gwas_prs", "dosage_risk") and not items and raw_items:
+            # All known risk variants are ref/ref with zero contribution; show compact summary
+            label_short = "GWAS/PRS" if layer == "gwas_prs" else "剂量风险"
             lines.append(
-                f"- GWAS 风险等位基因：{comp.get('gwas_score', 0)} / "
-                f"{gwas_adj.get('effective_gwas_weight', COMPLEX_WEIGHT_GWAS_COMMON)} "
-                f"（原 {comp.get('gwas_original_score', comp.get('gwas_score', 0))}，"
-                f"因 VCF 过滤按 {gwas_adj.get('downweight_factor', 1):.0%} 折算）"
+                f"_该疾病共定义 {len(raw_items)} 个 {label_short} 位点，"
+                f"本次样本中 {inferred_count} 个未真实检出（已推断为 ref/ref），"
+                "无风险等位基因贡献。_"
             )
-            lines.append(f"- GWAS 未评估权重：{gwas_adj.get('unassessed_gwas_weight', 0)} / {COMPLEX_WEIGHT_GWAS_COMMON}")
-            lines.append(f"> {gwas_adj.get('note', '')}")
         else:
-            lines.append(f"- GWAS 风险等位基因：{comp.get('gwas_score', 0)} / 25")
-        lines.append(f"- 文献/通路支持：{comp.get('literature_score', 0)} / 10")
-        lines.append(f"- 人群罕见度：{round(comp.get('rarity_score', 0), 1)} / 10")
-        if comp.get("min_gnomad_af") is not None:
-            lines.append(f"- 最低 gnomAD AF：{comp['min_gnomad_af']}")
+            lines.extend(_render_layer_table(layer, items))
         lines.append("")
 
-        # Per-variant contribution table
-        rare_details = comp.get("rare_functional_details", [])
-        gwas_hits = comp.get("gwas_hits", [])
-        if rare_details or gwas_hits:
-            lines.append("### 关键突变/位点贡献明细")
-            lines.append("")
-            lines.append("| 基因 | 位点 | 类别 | 贡献分 | 依据 |")
-            lines.append("|------|------|------|--------|------|")
-            for d in sorted(rare_details, key=lambda x: x.get("contribution", 0), reverse=True):
-                notes = ", ".join(d.get("notes", []))
-                var = d.get("variant", "")
-                lines.append(
-                    f"| {d.get('gene', '')} | `{var}` | 罕见功能变异 | {d.get('contribution', 0)} | {notes} |"
-                )
-            for h in gwas_hits:
-                lines.append(
-                    f"| {h.get('gene', '')} | {h.get('chrom', '')}:{h.get('pos', '')} "
-                    f"({h.get('rsid', '')}) | GWAS lead SNP | +{h.get('points', 0)} | 基因型 {h.get('gt', '')} |"
-                )
-            lines.append("")
-            lines.append(
-                "> 贡献分为模型估算值，反映该变异/位点对当前表型的可能遗传贡献，非临床验证结果。"
-            )
-            lines.append("")
+    # Other notable Tier 2/3 variants
+    section_num = 5
+    lines.append(f"## {section_num}. 其他值得关注的 Tier 2/3 变异")
+    section_num += 1
+    tier1 = gpa_result.get("tier1_variants", [])
+    tier2 = gpa_result.get("tier2_variants", [])
+    tier3 = gpa_result.get("tier3_variants", [])
+
+    notable: list[dict] = []
+    for v in tier2 + tier3:
+        if v.get("clinvar_plp"):
+            notable.append(v)
+            continue
+        if _get(v, "IMPACT", "impact", "primary_impact").upper() == "HIGH":
+            notable.append(v)
+            continue
+        gene = _get(v, "GENE", "gene")
+        if gene and gene in (gene_contribution_map or {}):
+            notable.append(v)
+
+    # Remove duplicates already shown in layered findings
+    shown_keys = {_variant_id(x) for x in tier1}
+    shown_keys.update({_variant_id(x) for x in layer_items["mendelian_mod"]})
+    shown_keys.update({_variant_id(x) for x in layer_items["regulatory"]})
+    notable = [v for v in notable if _variant_id(v) not in shown_keys]
+
+    if notable:
+        lines.append(f"以下 {len(notable)} 个变异具有 ClinVar P/LP 注释、HIGH 影响或位于核心基因内，建议关注：")
+        lines.append("")
+        lines.append("| 基因 | 位点 | cDNA | 蛋白 | ClinVar | 影响/类型 | 合子性 | gnomAD AF | 基因贡献 | 外显率 | 标志 |")
+        lines.append("|------|------|------|------|---------|-----------|--------|-----------|----------|--------|------|")
+        for v in notable:
+            lines.append(_variant_table_row(v, show_clinvar=True))
     else:
-        lines.append("## 6. 综合风险评分")
-        total = score_result.get("total_score", 0)
-        level = score_result.get("risk_level", "无明确风险")
-        meaning = score_result.get("risk_meaning", "")
-        lines.append(f"- **总分**：{total}/100")
-        lines.append(f"- **风险等级**：**{level}**")
-        lines.append(f"- **含义**：{meaning}")
-        lines.append("")
-        lines.append("**分数组成**：")
-        lines.append(f"- Tier 1 贡献：{comp.get('tier1_score', 0)} / {40}")
-        lines.append(f"- Tier 2 贡献：{comp.get('tier2_score', 0)} / {25}")
-        lines.append(f"- 文献支持：{comp.get('literature_score', 0)} / {20}")
-        lines.append(f"- 人群罕见度：{round(comp.get('rarity_score', 0), 1)} / {10}")
-        lines.append(f"- 性别/年龄校正：{score_result.get('sex_age_bonus', 0)} / {5}")
-        if comp.get("min_gnomad_af") is not None:
-            lines.append(f"- 最低 gnomAD AF：{comp['min_gnomad_af']}")
+        lines.append("_未检出其他需要特别关注的 Tier 2/3 变异_")
+    lines.append("")
+
+    # ClinVar enriched summary
+    clinvar_enriched = contribution.get("clinvar_enriched", [])
+    if clinvar_enriched:
+        lines.append(f"## {section_num}. ClinVar 注释概览")
+        section_num += 1
+        lines.append(f"- 疾病模板基因区内共有 **{len(clinvar_enriched)}** 个变异带有 ClinVar 注释。")
+        plp = [v for v in clinvar_enriched if v.get("clinvar_category") in ("pathogenic", "likely_pathogenic")]
+        vus = [v for v in clinvar_enriched if v.get("clinvar_category") == "vus"]
+        other = [v for v in clinvar_enriched if v.get("clinvar_category") not in ("pathogenic", "likely_pathogenic", "vus")]
+        lines.append(f"- P/LP：{len(plp)} 个 | VUS：{len(vus)} 个 | 其他：{len(other)} 个")
+        lines.append("- ClinVar 分类仅作为信息增强，VUS 等不自动降权。")
         lines.append("")
 
-    lines.append("## 7. 数据局限性声明")
+    # Domain-dive candidates
+    if domain_dive_candidates:
+        lines.append(f"## {section_num}. Domain-dive 升级候选分析")
+        section_num += 1
+        lines.append(f"- 对 Tier 2/3 中的核心基因变异进行了疾病特异性结构域深度分析，发现 **{len(domain_dive_candidates)} 个** 潜在升级候选。")
+        lines.append("- 以下位点落在该疾病关键功能区域或邻近关键残基，建议人工复核。")
+        lines.append("")
+        lines.append("| 基因 | 蛋白变化 | 关键区域 | 最近关键残基 | 推荐 | 依据 |")
+        lines.append("|------|----------|----------|--------------|------|------|")
+        for item in domain_dive_candidates:
+            v = item["variant"]
+            dd = item["domain_dive"]
+            gene = _get(v, "GENE", "gene")
+            hgvsp = _get(v, "HGVSp", "hgvsp", "primary_hgvsp")
+            regions = ", ".join(r["name"] for r in dd.get("matched_regions", [])) or "-"
+            nearby = dd.get("nearest_critical_residues", [])
+            nearby_str = "; ".join(f"{n['residue']}({n['distance']}aa)" for n in nearby[:3]) if nearby else "-"
+            rec = dd.get("upgrade_recommendation", "")
+            rec_zh = {"tier2_candidate": "考虑升 Tier 2", "monitor": "密切监测", "no_evidence": "无证据"}.get(rec, rec)
+            reasoning = dd.get("reasoning", "")
+            lines.append(f"| {gene} | {hgvsp} | {regions} | {nearby_str} | {rec_zh} | {reasoning} |")
+        lines.append("")
+
+    # Data limitations
+    lines.append(f"## {section_num}. 数据局限性与建议")
     lines.append("- 本分析基于 germline SNV/Indel，未覆盖 CNV/SV/表观遗传变异。")
-    if is_complex:
+    lines.append(
+        "- **未检出高外显致病突变不等于排除遗传病因**：部分致病变异可能位于当前 VCF "
+        "未覆盖区域、未被注释的基因，或需要家系/功能实验验证。"
+    )
+    lines.append("- 遗传贡献度评分反映当前可检出的遗传证据，不等同于患病风险或临床诊断。")
+    if vcf_qc and (vcf_qc.get("common_variants_filtered") or vcf_qc.get("likely_filtered")):
         lines.append(
-            "- 遗传贡献度评分用于量化遗传因素对复杂表型的可能解释比例，不等同于患病风险或临床诊断。"
+            "- **输入 VCF 疑似已过滤常见变异**：锚定位点真实检出率较低，GWAS/PRS 常见风险等位基因部分未保留。"
+            "推断 ref/ref 会在一定程度上低估多基因风险；如需更准确评估，建议使用未过滤的完整 VCF。"
         )
-        lines.append(
-            "- 复杂表型（如高尿酸、痛风、代谢综合征）受生活方式、环境和多基因累加影响，遗传贡献度仅反映当前可检出的遗传证据。"
-        )
-    else:
-        lines.append("- 风险评分综合 ClinVar、OMIM、HPO 及文献证据，仅供科研参考，不构成临床诊断。")
-    if vcf_qc and vcf_qc.get("common_variants_filtered"):
-        lines.append(
-            "- **输入 VCF 疑似已过滤常见变异**：锚定位点检出率较低，GWAS 常见风险等位基因在 VCF 中未保留。"
-            "在已基因分型 callset 中可推断为 ref/ref；如需更准确的复杂表型遗传贡献评估，建议使用未过滤的完整 VCF 重新运行。"
-        )
-    lines.append("- 文献检索范围限定高影响因子英文期刊，可能存在发表偏倚。")
+    lines.append("- 文献检索范围可能受数据库更新频率和发表偏倚影响。")
     lines.append("- 最终临床解读需结合完整家族史、表型及实验验证。")
     lines.append("")
 

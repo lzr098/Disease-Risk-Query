@@ -126,13 +126,15 @@ def preflight_check() -> dict:
     cache_ok = (VEP_CACHE / "homo_sapiens").exists()
     items.append({"name": "VEP cache", "exists": cache_ok, "status": "PASS" if cache_ok else "WARN"})
 
-    # Check liftover chain availability (will be auto-downloaded on first use)
-    from liftover import ensure_chain_file
-    try:
-        chain_path = ensure_chain_file("GRCh37", "GRCh38")
-        items.append({"name": "liftover chain (GRCh37->GRCh38)", "exists": chain_path.exists(), "status": "PASS"})
-    except Exception as exc:
-        items.append({"name": "liftover chain (GRCh37->GRCh38)", "exists": False, "status": f"FAIL: {exc}"})
+    # Check liftover chain availability (do not auto-download during preflight)
+    from liftover import LIFTOVER_DIR
+    expected_chain = LIFTOVER_DIR / "hg19ToHg38.over.chain.gz"
+    chain_exists = expected_chain.exists()
+    items.append({
+        "name": "liftover chain (GRCh37->GRCh38)",
+        "exists": chain_exists,
+        "status": "PASS" if chain_exists else "FAIL (will auto-download on first liftover)",
+    })
 
     return {
         "overall_ready": all(
@@ -184,6 +186,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         literature_variants=lit_variants,
         refresh_cache=args.refresh_cache,
         disease_mode=args.disease_mode,
+        gwas_enabled=not args.no_gwas,
+        literature_enabled=not args.no_literature,
     )
 
     try:
