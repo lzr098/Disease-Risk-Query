@@ -153,6 +153,19 @@ python3 ~/.workbuddy/skills/gpa-disease-risk-query/scripts/main.py \
 
 报告会额外输出"关键突变/位点贡献明细"，列出每个罕见功能变异和 GWAS lead SNP 的贡献分与依据。
 
+## VCF 完整性检测与 GWAS 维度自动折算
+
+Pipeline 在 Step 1 会对输入 VCF 进行完整性检测：使用疾病内置的 GWAS lead SNP 作为"锚定位点"，检查这些位置是否仍然保留在 VCF 中（即使样本为 REF/REF，高质量 genotyping VCF 也应保留这些位点）。
+
+- **正常 VCF**：锚定位点检出率 ≥ 50%，GWAS 维度按完整权重（25 分）评估。
+- **疑似过滤 VCF**：锚定位点检出率 < 50%，认为常见变异已被上游过滤。复杂表型模式下：
+  - GWAS 维度有效权重降至 25 × 40% = 10 分；
+  - 剩余 15 分标记为"未评估"；
+  - 总分按有效权重重新缩放至 0–100，保证不同 VCF 之间的分数可比性；
+  - 报告和 JSON 中明确标注 `vcf_common_variants_filtered: true` 及检出率。
+
+因此，若使用过滤后的 VCF 分析复杂表型，报告会提示"GWAS 常见风险等位基因可能缺失"，并建议用未过滤的完整 VCF 重新运行以获得更准确的贡献度评估。
+
 ## 关于 LiftOver 的设计选择
 
 **实现方案：pyliftover + samtools faidx + vcfpy。**

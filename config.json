@@ -1,0 +1,28 @@
+{
+  "name": "gpa-disease-risk-query",
+  "version": "0.1.0",
+  "description": "单样本特定疾病遗传风险查询系统：从 VCF 到疾病关联基因集、VEP 注释、Tier 分级与综合风险评分的完整 pipeline。",
+  "author": "Helix",
+  "entry": "scripts/main.py",
+  "python_version": ">=3.10",
+  "depends_on": [
+    "dgra-genomic-phenotype",
+    "dgra-prefilter"
+  ],
+  "local_data": [
+    "~/.workbuddy/data/genome/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+    "~/.workbuddy/data/clinvar/clinvar.vcf.gz",
+    "~/.workbuddy/data/omim/omim.db",
+    "~/.workbuddy/data/hpo/genes_to_phenotype.txt",
+    "~/.workbuddy/data/hgnc/hgnc_lookup.json",
+    "~/.workbuddy/data/gencode/gencode.v44.annotation.gtf.gz",
+    "~/.dgra-prefilter/refs/gencode_v44_gene_loci.bed",
+    "~/.dgra-prefilter/refs/clinvar_pathogenic_GRCh38.bed"
+  ],
+  "external_tools": [
+    "bcftools >= 1.17",
+    "samtools",
+    "CrossMap (Python package, already in default venv)",
+    "Docker + ensemblorg/ensembl-vep:latest"
+  ]
+}

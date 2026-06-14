@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Runtime cache / references (rebuilt locally)
+references/*.json
+references/offline_data/
+
+# Output / test artifacts
+*.vcf.gz
+*.vcf.gz.csi
+*.tbi
+*.log
