@@ -19,7 +19,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
-from constants import HPO_GENES_TO_PHENOTYPE, HPO_DISEASE_CACHE
+from constants import HPO_GENES_TO_PHENOTYPE, HPO_DISEASE_CACHE, resolve_builtin_disease_key
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,10 @@ DISEASE_TO_HPO: dict[str, str] = {
     "hemochromatosis": "HP:0003272",
     "alpha-1 antitrypsin deficiency": "HP:0002032",
     "phenylketonuria": "HP:0001250",
+    "hyperuricemia": "HP:0002149",
+    "gout": "HP:0001997",
+    "高尿酸血症": "HP:0002149",
+    "痛风": "HP:0001997",
 }
 
 
@@ -146,6 +150,18 @@ class HPOMapper:
                 "genes": genes,
             }
 
+        # 0. Built-in disease alias resolution (handles Chinese names)
+        canonical = resolve_builtin_disease_key(query)
+        if canonical and canonical in DISEASE_TO_HPO:
+            hpo_id = DISEASE_TO_HPO[canonical]
+            return {
+                "hpo_id": hpo_id,
+                "hpo_name": self._hpo_to_name.get(hpo_id, "Unknown HPO term"),
+                "query": query,
+                "matched_by": "curated_builtin",
+                "genes": sorted(self._hpo_to_genes.get(hpo_id, set())),
+            }
+
         norm = _normalize(query)
 
         # 1. Curated direct map
@@ -159,16 +175,17 @@ class HPOMapper:
                 "genes": sorted(self._hpo_to_genes.get(hpo_id, set())),
             }
 
-        # 2. Curated keyword partial match
-        for disease_name, candidate_hpo in DISEASE_TO_HPO.items():
-            if disease_name in norm or norm in disease_name:
-                return {
-                    "hpo_id": candidate_hpo,
-                    "hpo_name": self._hpo_to_name.get(candidate_hpo, "Unknown HPO term"),
-                    "query": query,
-                    "matched_by": "curated_partial",
-                    "genes": sorted(self._hpo_to_genes.get(candidate_hpo, set())),
-                }
+        # 2. Curated keyword partial match (skip empty norm to avoid false matches)
+        if norm:
+            for disease_name, candidate_hpo in DISEASE_TO_HPO.items():
+                if disease_name in norm or norm in disease_name:
+                    return {
+                        "hpo_id": candidate_hpo,
+                        "hpo_name": self._hpo_to_name.get(candidate_hpo, "Unknown HPO term"),
+                        "query": query,
+                        "matched_by": "curated_partial",
+                        "genes": sorted(self._hpo_to_genes.get(candidate_hpo, set())),
+                    }
 
         # 3. Search HPO phenotype names for keyword overlap
         query_tokens = set(norm.split())

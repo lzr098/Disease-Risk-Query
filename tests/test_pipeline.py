@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from hpo_mapper import resolve_disease_query
 from gene_set_builder import build_disease_gene_set
 from risk_scorer import calculate_total_score
+from clinvar_phenotype_matcher import _normalize_text
 
 
 def _write_vcf(path: Path, header_lines: list[str], records: list[str]) -> None:
@@ -28,8 +29,15 @@ def _write_vcf(path: Path, header_lines: list[str], records: list[str]) -> None:
 def test_hpo_mapper_alzheimer():
     result = resolve_disease_query("Alzheimer disease")
     assert result["hpo_id"] == "HP:0000726"
-    assert result["matched_by"] == "curated"
+    assert result["matched_by"] in ("curated", "curated_builtin")
     assert "APOE" in result["genes"] or "APP" in result["genes"]
+
+
+def test_hpo_mapper_hyperuricemia_chinese():
+    result = resolve_disease_query("高尿酸血症")
+    assert result["hpo_id"] == "HP:0002149"
+    assert result["hpo_name"] == "Hyperuricemia"
+    assert result["matched_by"] == "curated_builtin"
 
 
 def test_gene_set_builder():
@@ -178,6 +186,16 @@ def test_omim_alzheimer_english_keywords_and_clean_symbols():
     # Disease names and locus labels must be cleaned out
     assert "ALZHEIMER DISEASE" not in omim_genes
     assert not any("\n" in g for g in omim_genes), "OMIM symbols should not contain embedded newlines"
+
+
+def test_clinvar_disease_keywords_chinese_no_empty():
+    from clinvar_phenotype_matcher import disease_keywords
+
+    kws = disease_keywords("高尿酸血症")
+    assert "hyperuricemia" in kws
+    assert "gout" in kws
+    assert "" not in kws
+    assert not any(_normalize_text(kw) == "" for kw in kws)
 
 
 if __name__ == "__main__":

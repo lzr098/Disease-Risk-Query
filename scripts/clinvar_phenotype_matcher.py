@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import Iterable, Optional
 
-from constants import CLINVAR_VCF, DISEASE_CLINVAR_KEYWORDS
+from constants import CLINVAR_VCF, DISEASE_CLINVAR_KEYWORDS, resolve_builtin_disease_key
 
 logger = logging.getLogger(__name__)
 
@@ -145,12 +145,16 @@ def annotate_variant_clinvar_disease(
 
 def disease_keywords(disease_name: str) -> list[str]:
     """Return ClinVar phenotype keywords for a disease query."""
-    norm = _normalize_text(disease_name)
+    # Use canonical English key for keyword lookup so Chinese queries map to
+    # the correct keyword set.
+    canonical = resolve_builtin_disease_key(disease_name)
+    lookup_name = canonical or disease_name
+    norm = _normalize_text(lookup_name)
     keywords = set(DISEASE_CLINVAR_KEYWORDS.get(norm, []))
-    keywords.add(disease_name)
+    keywords.add(lookup_name)
     # Add disease stem (e.g. "alzheimer disease" -> "alzheimer")
-    if " " in disease_name:
-        keywords.add(disease_name.split()[0])
+    if " " in lookup_name:
+        keywords.add(lookup_name.split()[0])
     return sorted(keywords)
 
 

@@ -95,7 +95,13 @@ def _build_clinvar_variant_bed(
         logger.warning("ClinVar VCF not found at %s; skipping ClinVar variant BED", vcf_path)
         return 0
 
-    keywords = disease_keywords(disease_name)
+    # Use canonical English disease key for keyword lookup so Chinese queries
+    # do not produce empty normalized keywords that match every record.
+    canonical = resolve_builtin_disease_key(disease_name)
+    lookup_name = canonical or disease_name
+    keywords = disease_keywords(lookup_name)
+    # Drop empty/whitespace-only normalized keywords to avoid false positives.
+    keywords = [kw for kw in keywords if _normalize(kw)]
     proc = subprocess.run(
         ["bcftools", "view", "-H", str(vcf_path)],
         capture_output=True, text=True, check=False,
