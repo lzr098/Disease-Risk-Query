@@ -89,7 +89,7 @@ def assess_variant_in_key_regions(
     }
 
     if not gene_regions:
-        result["reasoning"] = f"No disease-specific key regions defined for {gene} in {disease_name}."
+        result["reasoning"] = f"疾病「{disease_name}」中未定义 {gene} 的关键区域。"
         return result
 
     # Check region matches
@@ -117,30 +117,30 @@ def assess_variant_in_key_regions(
     if result["in_key_region"] and nearby:
         result["upgrade_recommendation"] = "tier2_candidate"
         result["reasoning"] = (
-            f"{gene} p.{protein_position} falls within a disease-relevant key region "
-            f"({', '.join(r['name'] for r in result['matched_regions'])}) and is near "
-            f"critical residue(s) "
-            f"({', '.join(f'{n['residue']}({n['distance']}aa)' for n in nearby[:3])}). "
-            f"Manual Tier 2 upgrade should be considered."
+            f"{gene} p.{protein_position} 位于疾病关键区域 "
+            f"（{', '.join(r['name'] for r in result['matched_regions'])}），"
+            f"且邻近关键残基 "
+            f"（{', '.join(f'{n['residue']}({n['distance']}aa)' for n in nearby[:3])}），"
+            f"建议人工复核是否升级为 Tier 2。"
         )
     elif result["in_key_region"]:
         result["upgrade_recommendation"] = "monitor"
         result["reasoning"] = (
-            f"{gene} p.{protein_position} falls within a disease-relevant key region "
-            f"({', '.join(r['name'] for r in result['matched_regions'])}), but no annotated "
-            f"critical residues are nearby. Consider monitoring or functional validation."
+            f"{gene} p.{protein_position} 位于疾病关键区域 "
+            f"（{', '.join(r['name'] for r in result['matched_regions'])}），"
+            f"但附近无已标注关键残基，建议持续监测或功能验证。"
         )
     elif nearby:
         result["upgrade_recommendation"] = "monitor"
         result["reasoning"] = (
-            f"{gene} p.{protein_position} is near critical residue(s) "
-            f"({', '.join(f'{n['residue']}({n['distance']}aa)' for n in nearby[:3])}) "
-            f"for {disease_name}, though outside annotated key regions."
+            f"{gene} p.{protein_position} 邻近关键残基 "
+            f"（{', '.join(f'{n['residue']}({n['distance']}aa)' for n in nearby[:3])}），"
+            f"但不在已标注的关键区域内。"
         )
     else:
         result["reasoning"] = (
-            f"{gene} p.{protein_position} is outside annotated disease-relevant regions "
-            f"and critical residues for {gene} in {disease_name}."
+            f"{gene} p.{protein_position} 不在 {disease_name} 已标注的 "
+            f"疾病相关区域或关键残基附近。"
         )
 
     return result

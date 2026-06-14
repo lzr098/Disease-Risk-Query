@@ -425,16 +425,21 @@ def generate_report(
 
     # Build gene-context lookup from disease reference and known variant notes
     gene_context: dict[str, str] = {}
-    if disease_reference:
-        core_genes_set = set(disease_reference.get("core_genes", []))
-        for g in core_genes_set:
-            gene_context[g] = "核心基因"
-    # Enrich with known variant notes (first sentence as function context)
+    core_genes_set = set(disease_reference.get("core_genes", [])) if disease_reference else set()
+    # Enrich with known variant notes as gene function descriptions
     for k in contribution.get("known_pathogenic", []):
         gene = k.get("gene", "")
         note = k.get("note", "")
-        if gene and note and gene not in gene_context:
-            gene_context[gene] = note.split("；")[0] if "；" in note else note[:60]
+        if gene and note:
+            # Use the note as gene function description
+            if gene not in gene_context:
+                gene_context[gene] = note
+            elif len(note) > len(gene_context[gene]):
+                gene_context[gene] = note
+    # Fallback: label remaining core genes
+    for g in core_genes_set:
+        if g not in gene_context:
+            gene_context[g] = f"高尿酸/痛风核心基因"
 
     for layer in layer_order:
         label = _LAYER_LABELS[layer]
@@ -461,6 +466,20 @@ def generate_report(
             )
         else:
             lines.extend(_render_layer_table(layer, items, gene_context))
+            # For known_pathogenic, add gene function context below table
+            if layer == "known_pathogenic" and items:
+                shown_genes = {k.get("gene", "") for k in items if k.get("gene")}
+                for g in sorted(shown_genes):
+                    ctx = gene_context.get(g, "")
+                    note_lines = []
+                    for k in items:
+                        if k.get("gene") == g and k.get("note"):
+                            note_lines.append(k["note"])
+                    if note_lines or ctx:
+                        lines.append(f"**{g} 基因说明**：{ctx}")
+                        for nl in note_lines[:2]:
+                            lines.append(f"- {nl}")
+                        lines.append("")
         lines.append("")
 
     # Other notable Tier 2/3 variants
