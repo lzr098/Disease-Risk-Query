@@ -321,15 +321,20 @@ def _score_gwas_prs(
             "inferred_ref_ref": kg.inferred_ref_ref,
         })
 
+    # Normalise by sqrt(variant count) for cross-disease comparability
+    n = len(variants)
+    total_normalised = total / math.sqrt(n)
+
     # Downweight if common variants are filtered in the input VCF
     if vcf_qc.get("likely_filtered"):
-        total *= VCF_GWAS_DOWNWEIGHT_IF_FILTERED
+        total_normalised *= VCF_GWAS_DOWNWEIGHT_IF_FILTERED
 
     return {
-        "score": round(total, 4),
-        "sqrt_n": round(math.sqrt(len(variants)), 1),
+        "score": round(total_normalised, 4),
+        "score_raw": round(total, 4),
+        "sqrt_n": round(math.sqrt(n), 1),
         "percentile": None,
-        "variant_count": len(variants),
+        "variant_count": n,
         "variants": details,
     }
 
