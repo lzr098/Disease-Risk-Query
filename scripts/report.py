@@ -133,12 +133,8 @@ def _render_layer_table(layer: str, items: list[dict], gene_context: dict[str, s
         for d in items:
             rsid = d.get("rsid") or "-"
             gene = d.get("gene") or "-"
-            # Get gene context from known variant note or gene_context
-            gene_fn = ctx.get(gene, "")
-            if not gene_fn and d.get("note"):
-                # Extract first sentence of note for function context
-                note = d.get("note", "")
-                gene_fn = note.split("；")[0] if "；" in note else note[:60]
+            # Short gene function label for the "功能" column
+            gene_fn = ctx.get(gene, "疾病核心基因")
             variant = d.get("variant") or "-"
             risk_allele = d.get("risk_allele") or d.get("effect_allele") or "-"
             dosage = d.get("dosage") if d.get("dosage") is not None else "-"
@@ -423,23 +419,11 @@ def generate_report(
 
     section_counter = 1
 
-    # Build gene-context lookup from disease reference and known variant notes
+    # Build gene-context lookup for table annotations and gene descriptions
     gene_context: dict[str, str] = {}
     core_genes_set = set(disease_reference.get("core_genes", [])) if disease_reference else set()
-    # Enrich with known variant notes as gene function descriptions
-    for k in contribution.get("known_pathogenic", []):
-        gene = k.get("gene", "")
-        note = k.get("note", "")
-        if gene and note:
-            # Use the note as gene function description
-            if gene not in gene_context:
-                gene_context[gene] = note
-            elif len(note) > len(gene_context[gene]):
-                gene_context[gene] = note
-    # Fallback: label remaining core genes
     for g in core_genes_set:
-        if g not in gene_context:
-            gene_context[g] = f"高尿酸/痛风核心基因"
+        gene_context[g] = "疾病核心基因"
 
     for layer in layer_order:
         label = _LAYER_LABELS[layer]
@@ -470,15 +454,10 @@ def generate_report(
             if layer == "known_pathogenic" and items:
                 shown_genes = {k.get("gene", "") for k in items if k.get("gene")}
                 for g in sorted(shown_genes):
-                    ctx = gene_context.get(g, "")
-                    note_lines = []
-                    for k in items:
-                        if k.get("gene") == g and k.get("note"):
-                            note_lines.append(k["note"])
-                    if note_lines or ctx:
-                        lines.append(f"**{g} 基因说明**：{ctx}")
-                        for nl in note_lines[:2]:
-                            lines.append(f"- {nl}")
+                    desc = gene_context.get(g, "")
+                    # Only show if it's more than a generic label
+                    if desc and desc != "疾病核心基因":
+                        lines.append(f"**{g} 基因功能**：{desc}")
                         lines.append("")
         lines.append("")
 
