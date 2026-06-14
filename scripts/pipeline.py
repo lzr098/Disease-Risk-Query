@@ -401,6 +401,18 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     # Generate report
     report_path = work_dir / "report.md"
     legacy_gwas_lead_snps = _known_genotypes_to_legacy_gwas(known_genotypes)
+
+    # Build disease space stats for report
+    known_found = sum(1 for kg in known_genotypes if kg.dosage > 0 or not kg.inferred_ref_ref)
+    known_inferred = sum(1 for kg in known_genotypes if kg.inferred_ref_ref)
+    disease_space = {
+        "total_variants": vcf_qc.get("total_variants", 0) if vcf_qc else 0,
+        "analyzed_variants": space_result["variant_count"],
+        "known_variants_queried": len(known_genotypes),
+        "known_found": known_found,
+        "known_inferred": known_inferred,
+    }
+
     generate_report(
         disease_name=config.disease_query,
         hpo_id=hpo_id,
@@ -419,6 +431,7 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         output_path=report_path,
         disease_mode=disease_mode,
         domain_dive_candidates=domain_dive_candidates,
+        disease_space=disease_space,
     )
 
     # Save structured JSON

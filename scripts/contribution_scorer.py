@@ -183,17 +183,15 @@ def _score_known_pathogenic(
 ) -> list[dict]:
     """Curated known pathogenic variants from the disease template.
 
-    Each variant has its contribution_score from the template. The actual
-    contribution is scaled by a zygosity factor derived from the gene's
-    penetrance_score:
+    Uses a penetrance-informed zygosity model to distinguish:
+    - dominant variants (1 copy sufficient)
+    - recessive variants (carrier → minimal, homozygous → full)
+    - dose-dependent risk variants (homozygous amplified for moderate+ confidence)
 
-    - penetrance >= 0.8 (likely dominant):
-        heterozygous (dosage=1) → full score; homozygous → ceiling 1.0
-    - 0.3 <= penetrance < 0.8 (moderate / incomplete penetrance):
-        dosage-based; heterozygous ~0.7×, homozygous ~1.4×
-    - penetrance < 0.3 (likely recessive):
-        homozygous/compound-het (dosage>=2) → full score;
-        heterozygous carrier → 0.1× (minimal contribution)
+    For low-penetrance genes (penetrance < 0.3), homozygous genotypes that are
+    moderate/high confidence receive a 2.0× amplifier. This captures common
+    risk variants like ABCG2 Q141K in hyperuricemia that have strong
+    population-level dosage effects despite low monogenic penetrance.
     """
     results = []
     gene_map = {g.gene: g for g in profile.gene_set}
@@ -204,18 +202,31 @@ def _score_known_pathogenic(
     for kg in pathogenic_vars:
         v = kg.variant
         if kg.dosage == 0 and kg.inferred_ref_ref:
-            # REF/REF (absent); skip — no risk contribution
+            continue
+        if kg.dosage == 0:
             continue
         gene_w = gene_map.get(v.gene)
         penetrance_score = gene_w.penetrance_score if gene_w else 0.5
+        confidence = (v.confidence or "moderate").lower()
 
-        # Zygosity factor based on penetrance
-        if penetrance_score >= 0.8:  # High penetrance (likely dominant)
-            zygosity_factor = min(kg.dosage, 1.0)  # 1 copy enough, hom capped
-        elif penetrance_score >= 0.3:  # Moderate penetrance
+        if penetrance_score >= 0.8:
+            # High penetrance (likely dominant): 1 copy sufficient
+            zygosity_factor = min(kg.dosage, 1.0)
+        elif penetrance_score >= 0.3:
+            # Moderate penetrance: dosage-dependent
             zygosity_factor = min(kg.dosage * 0.7, 1.4)
-        else:  # Low/very_low penetrance (likely recessive)
-            zygosity_factor = 1.0 if kg.dosage >= 2 else 0.1  # carrier=0.1
+        else:
+            # Low/very_low penetrance
+            if kg.dosage >= 2 and confidence in ("high", "moderate"):
+                # Homozygous known risk variant with decent confidence.
+                # 2.0× accounts for dose-dependent risk variants (e.g.
+                # ABCG2 Q141K) that have strong effects when homozygous
+                # despite low monogenic penetrance in the gene model.
+                zygosity_factor = 2.0
+            elif kg.dosage >= 2:
+                zygosity_factor = 1.0
+            else:
+                zygosity_factor = 0.1  # heterozygous carrier → negligible
 
         contribution = v.contribution_score * zygosity_factor
 
@@ -271,10 +282,12 @@ def _score_gwas_prs(
 ) -> dict:
     """Weighted polygenic contribution from GWAS lead and PRS variants.
 
-    Each variant contributes beta × dosage × weight. The raw sum is
-    normalised by sqrt(n) so that panels of different sizes (e.g. 40 vs
-    77 GWAS SNPs across diseases) produce roughly comparable scores.
-    A larger panel still contributes more, but with diminishing returns.
+    Each variant contributes sqrt(|beta|) × dosage × contribution_score.
+    Using sqrt(|beta|) instead of raw beta amplifies the contribution of
+    small-effect variants (e.g. quantitative-trait GWAS with |beta|~0.02)
+    while preserving effect-direction ordering.  The raw sum is no longer
+    normalised by panel size so genotype differences at individual loci
+    produce visible score changes.
     """
     variants = [
         kg for kg in known_genotypes
@@ -288,8 +301,11 @@ def _score_gwas_prs(
     for kg in variants:
         v = kg.variant
         beta = v.beta or (math.log(v.or_value) if v.or_value else 0.0)
+        # Amplify small effect sizes via sqrt so quantitative-trait GWAS
+        # (|beta| ~ 0.02) still produce meaningful per-locus contributions
+        effective_beta = math.sqrt(abs(beta)) * (1 if beta >= 0 else -1)
         weight = v.contribution_score
-        contribution = beta * kg.dosage * weight
+        contribution = effective_beta * kg.dosage * weight
         total += contribution
         details.append({
             "rsid": v.rsid,
@@ -299,25 +315,21 @@ def _score_gwas_prs(
             "effect_allele": v.effect_allele,
             "dosage": kg.dosage,
             "beta": beta,
+            "beta_effective": round(effective_beta, 4),
             "weight": weight,
             "contribution": round(contribution, 4),
             "inferred_ref_ref": kg.inferred_ref_ref,
         })
 
-    # Normalise by sqrt(variant count) for cross-disease comparability
-    n = len(variants)
-    total_normalised = total / math.sqrt(n)
-
-    # Downweight if common variants are filtered
+    # Downweight if common variants are filtered in the input VCF
     if vcf_qc.get("likely_filtered"):
-        total_normalised *= VCF_GWAS_DOWNWEIGHT_IF_FILTERED
+        total *= VCF_GWAS_DOWNWEIGHT_IF_FILTERED
 
     return {
-        "score": round(total_normalised, 4),
-        "score_raw": round(total, 4),
-        "sqrt_n": round(math.sqrt(n), 1),
+        "score": round(total, 4),
+        "sqrt_n": round(math.sqrt(len(variants)), 1),
         "percentile": None,
-        "variant_count": n,
+        "variant_count": len(variants),
         "variants": details,
     }
 
@@ -416,11 +428,17 @@ def _overall_level(score: Optional[float], profile: DiseaseProfile) -> str:
             return "low"
         return "very_low"
     else:
-        if score >= 1.5:
+        # Complex mode: weights span 0–3.6, but in practice a single strong
+        # layer (e.g. known_pathogenic homozygous + modifiers) reaches ~0.7.
+        # Thresholds are set so that:
+        #   high   = mendelian_high hit or multiple strong layers
+        #   moderate = one strong known variant or clear polygenic signal
+        #   low    = some genetic evidence but insufficient alone
+        if score >= 1.0:
             return "high"
-        if score >= 0.8:
+        if score >= 0.5:
             return "moderate"
-        if score >= 0.3:
+        if score >= 0.2:
             return "low"
         return "very_low"
 

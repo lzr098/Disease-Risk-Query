@@ -59,7 +59,7 @@ def _format_gt_status(inferred: bool, gt: str = "") -> str:
     return "样本检出"
 
 
-def _variant_table_row(v: dict, show_clinvar: bool = False) -> str:
+def _variant_table_row(v: dict, show_clinvar: bool = False, gene_context: dict[str, str] | None = None) -> str:
     # v may be a contribution wrapper with "raw" pointing to the GPA variant,
     # or a raw GPA variant dict.
     raw = v.get("raw", v)
@@ -79,13 +79,17 @@ def _variant_table_row(v: dict, show_clinvar: bool = False) -> str:
     contrib_str = f"{gene_contrib}" if gene_contrib is not None else "-"
     pen_str = gene_pen or "-"
 
+    ctx = ""
+    if gene_context and gene in gene_context:
+        ctx = gene_context[gene]
+
     if show_clinvar:
         return (
-            f"| {gene} | `{var_id}` | {hgvsc} | {hgvsp} | "
+            f"| {gene} | {ctx} | `{var_id}` | {hgvsc} | {hgvsp} | "
             f"{clin_sig} | {impact}/{cons} | {gt} | {gnomad} | {contrib_str} | {pen_str} | {flags} |"
         )
     return (
-        f"| {gene} | `{var_id}` | {hgvsc} | {hgvsp} | "
+        f"| {gene} | {ctx} | `{var_id}` | {hgvsc} | {hgvsp} | "
         f"{impact}/{cons} | {gt} | {gnomad} | {contrib_str} | {pen_str} | {flags} |"
     )
 
@@ -111,11 +115,12 @@ def _known_variant_table_row(d: dict) -> str:
     )
 
 
-def _render_layer_table(layer: str, items: list[dict]) -> list[str]:
+def _render_layer_table(layer: str, items: list[dict], gene_context: dict[str, str] | None = None) -> list[str]:
     lines: list[str] = []
     if not items:
         lines.append("_未检出_")
         return lines
+    ctx = gene_context or {}
 
     if layer == "gwas_prs":
         lines.append("| SNP | 基因 | 位点 | 基因型 | 来源 | 风险等位 | 剂量 | OR | beta | 贡献 | 说明 |")
@@ -123,12 +128,17 @@ def _render_layer_table(layer: str, items: list[dict]) -> list[str]:
         for d in items:
             lines.append(_known_variant_table_row(d))
     elif layer in ("dosage_risk", "known_pathogenic"):
-        lines.append("| SNP | 基因 | 位点 | 基因型 | 来源 | 风险等位 | 剂量 | 贡献 | 置信度 | 说明 |")
-        lines.append("|-----|------|------|--------|------|----------|------|------|--------|------|")
+        lines.append("| SNP | 基因 | 功能 | 位点 | 基因型 | 来源 | 风险等位 | 剂量 | 贡献 | 置信度 | 说明 |")
+        lines.append("|-----|------|------|------|--------|------|----------|------|------|--------|------|")
         for d in items:
-            # Render similar to dosage_risk but without OR/beta
             rsid = d.get("rsid") or "-"
             gene = d.get("gene") or "-"
+            # Get gene context from known variant note or gene_context
+            gene_fn = ctx.get(gene, "")
+            if not gene_fn and d.get("note"):
+                # Extract first sentence of note for function context
+                note = d.get("note", "")
+                gene_fn = note.split("；")[0] if "；" in note else note[:60]
             variant = d.get("variant") or "-"
             risk_allele = d.get("risk_allele") or d.get("effect_allele") or "-"
             dosage = d.get("dosage") if d.get("dosage") is not None else "-"
@@ -137,22 +147,17 @@ def _render_layer_table(layer: str, items: list[dict]) -> list[str]:
             contrib = d.get("contribution")
             contrib_str = f"{contrib:.3f}" if isinstance(contrib, (int, float)) else "-"
             confidence = d.get("confidence", "-")
-            note = d.get("note", "")
+            note_line = d.get("note", "")
             lines.append(
-                f"| {rsid} | {gene} | `{variant}` | {gt} | {status} | {risk_allele} | "
-                f"{dosage} | {contrib_str} | {confidence} | {note} |"
+                f"| {rsid} | {gene} | {gene_fn} | `{variant}` | {gt} | {status} | {risk_allele} | "
+                f"{dosage} | {contrib_str} | {confidence} | {note_line} |"
             )
-    elif layer == "dosage_risk":
-        lines.append("| SNP | 基因 | 位点 | 基因型 | 来源 | 风险等位 | 剂量 | OR | beta | 贡献 | 说明 |")
-        lines.append("|-----|------|------|--------|------|----------|------|----|----|------|------|")
-        for d in items:
-            lines.append(_known_variant_table_row(d))
     else:
-        lines.append("| 基因 | 位点 | cDNA | 蛋白 | ClinVar | 影响/类型 | 合子性 | gnomAD AF | 基因贡献 | 外显率 | 标志 |")
-        lines.append("|------|------|------|------|---------|-----------|--------|-----------|----------|--------|------|")
+        lines.append("| 基因 | 基因-表型关系 | 位点 | cDNA | 蛋白 | ClinVar | 影响/类型 | 合子性 | gnomAD AF | 基因贡献 | 外显率 | 标志 |")
+        lines.append("|------|--------------|------|------|------|---------|-----------|--------|-----------|----------|--------|------|")
         show_clinvar = layer in ("mendelian_high", "mendelian_mod", "clinvar_enriched")
         for v in items:
-            lines.append(_variant_table_row(v, show_clinvar=show_clinvar))
+            lines.append(_variant_table_row(v, show_clinvar=show_clinvar, gene_context=ctx))
     return lines
 
 
@@ -162,9 +167,6 @@ def _executive_summary(
     known_genotypes: list[dict],
 ) -> list[str]:
     lines: list[str] = []
-    level = score_result.get("overall_level", "uncertain")
-    meaning = LEVEL_MEANING.get(level, level)
-    lines.append(f"- **总体评估**：{level} — {meaning}")
 
     # Key findings
     findings: list[str] = []
@@ -178,9 +180,25 @@ def _executive_summary(
         genes = sorted({h.get("gene", "") for h in high})
         findings.append(f"发现高外显致病突变（{', '.join(genes)}）")
     elif known:
-        genes = sorted({k.get("gene", "") for k in known if not k.get("inferred_ref_ref")})
-        if genes:
-            findings.append(f"发现已知致病位点真实检出（{', '.join(genes)}）")
+        real_known = [k for k in known if not k.get("inferred_ref_ref")]
+        if real_known:
+            detail_parts: list[str] = []
+            for k in real_known[:3]:
+                rsid = k.get("rsid", "")
+                gene = k.get("gene", "")
+                gt = k.get("gt", "")
+                note = k.get("note", "")
+                # Build concise description
+                desc = f"{gene} {rsid}"
+                if gt:
+                    desc += f"（{gt}）"
+                if note:
+                    # Trim note to keep it concise
+                    note_short = note[:80] + ("..." if len(note) > 80 else "")
+                    desc += f"：{note_short}"
+                detail_parts.append(desc)
+            detail = "；".join(detail_parts)
+            findings.append(f"发现已知致病位点真实检出：{detail}")
     elif mod:
         genes = sorted({m.get("gene", "") for m in mod})
         findings.append(f"发现中等外显变异（{', '.join(genes)}）")
@@ -233,18 +251,54 @@ def generate_report(
     vcf_qc: Optional[dict] = None,
     disease_mode: str = "mendelian",
     domain_dive_candidates: Optional[list[dict]] = None,
+    disease_space: Optional[dict] = None,
 ) -> Path:
-    """Generate the final Markdown disease contribution report."""
+    """Generate the final Markdown disease contribution report.
+
+    Args:
+        disease_space: Optional dict with variant analysis counts:
+            {'total_variants': 5366066, 'analyzed_variants': 6229,
+             'known_variants_queried': 48, 'known_found': 17,
+             'known_inferred': 31}
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     contribution = score_result.get("contribution", score_result)
     layer_levels = contribution.get("layer_levels", {})
 
     lines: list[str] = []
-    lines.append(f"# 疾病遗传贡献度评估报告：{disease_name}")
+    total = score_result.get("total_score", 0)
+    level = score_result.get("overall_level", "uncertain")
+    meaning = LEVEL_MEANING.get(level, level)
+
+    # --- Header with score and breakdown ---
+    lines.append(f"# 疾病遗传贡献度评估报告：{disease_name} — **{total}/100** ({level})")
+    lines.append("")
+    lines.append(f"**{total}/100 — {level}**：{meaning}")
     lines.append("")
 
-    # 1. Executive summary
+    # Score composition (weights from contribution_scorer.py, not in result dict)
+    layer_scores = {}
+    for layer in ("mendelian_high", "mendelian_mod", "known_pathogenic", "dosage_risk", "gwas_prs", "regulatory"):
+        score = sum(
+            x.get("contribution", 0) for x in contribution.get(layer, [])
+            if isinstance(x, dict)
+        )
+        if layer == "gwas_prs":
+            score = abs(contribution.get("gwas_prs", {}).get("score", 0.0))
+        layer_scores[layer] = score
+
+    parts: list[str] = []
+    for layer in ("mendelian_high", "mendelian_mod", "known_pathogenic", "dosage_risk", "gwas_prs", "regulatory"):
+        s = layer_scores[layer]
+        if s > 0 or layer == "known_pathogenic":
+            label = _LAYER_LABELS.get(layer, layer)
+            parts.append(f"{label}: {s:.3f}")
+    if parts:
+        lines.append(f"**分数组成**：{' | '.join(parts)}")
+        lines.append(f"**总分** = Σ min(layer, 1.0) × weight = {contribution.get('overall_score', total/100):.3f}")
+    lines.append("")
+
     lines.append("## 1. 执行摘要")
     lines.extend(_executive_summary(score_result, contribution, gwas_lead_snps or []))
     lines.append("")
@@ -258,8 +312,24 @@ def generate_report(
     lines.append(f"- **报告生成时间**：{datetime.now().isoformat(timespec='minutes')}")
     lines.append("")
 
-    lines.append("### VCF 质量与完整性")
-    if vcf_qc and vcf_qc.get("checked"):
+    lines.append("### VCF 质量与分析统计")
+    ds = disease_space or {}
+    if ds:
+        total_vcf = ds.get("total_variants", vcf_qc.get("total_variants", "N/A") if vcf_qc else "N/A")
+        analyzed = ds.get("analyzed_variants", "N/A")
+        kv_queried = ds.get("known_variants_queried", 0)
+        kv_found = ds.get("known_found", 0)
+        kv_inferred = ds.get("known_inferred", 0)
+        lines.append(f"- **VCF 总变异数**：{total_vcf:,} 个")
+        lines.append(f"- **本次分析纳入**：{analyzed:,} 个（过滤至疾病相关基因区域）")
+        if kv_queried:
+            lines.append(f"- **关键 SNP 查询**：{kv_queried} 个已知风险位点，其中 {kv_found} 个真实检出 + {kv_inferred} 个未 call 到（按 ref/ref 推断）")
+        lines.append(
+            "- **解读原则**：未 call 到的位点一律推断为 ref/ref（0/0），"
+            "需注意前序 genotyping 及过滤流程的可靠性。"
+            "常见 SNP 未保留提示上游可能经过硬过滤，多基因贡献评估可能存在低估。"
+        )
+    elif vcf_qc and vcf_qc.get("checked"):
         lines.append(
             f"- **锚定位点真实检出率**：{vcf_qc.get('anchor_snps_present', 0)} / "
             f"{vcf_qc.get('anchor_snps_checked', 0)} "
@@ -352,6 +422,20 @@ def generate_report(
     }
 
     section_counter = 1
+
+    # Build gene-context lookup from disease reference and known variant notes
+    gene_context: dict[str, str] = {}
+    if disease_reference:
+        core_genes_set = set(disease_reference.get("core_genes", []))
+        for g in core_genes_set:
+            gene_context[g] = "核心基因"
+    # Enrich with known variant notes (first sentence as function context)
+    for k in contribution.get("known_pathogenic", []):
+        gene = k.get("gene", "")
+        note = k.get("note", "")
+        if gene and note and gene not in gene_context:
+            gene_context[gene] = note.split("；")[0] if "；" in note else note[:60]
+
     for layer in layer_order:
         label = _LAYER_LABELS[layer]
         items = layer_items[layer]
@@ -376,7 +460,7 @@ def generate_report(
                 "无风险等位基因贡献。_"
             )
         else:
-            lines.extend(_render_layer_table(layer, items))
+            lines.extend(_render_layer_table(layer, items, gene_context))
         lines.append("")
 
     # Other notable Tier 2/3 variants
@@ -406,12 +490,27 @@ def generate_report(
     notable = [v for v in notable if _variant_id(v) not in shown_keys]
 
     if notable:
-        lines.append(f"以下 {len(notable)} 个变异具有 ClinVar P/LP 注释、HIGH 影响或位于核心基因内，建议关注：")
+        # Build gene-context lookup from disease reference
+        core_genes_set = set(disease_reference.get("core_genes", [])) if disease_reference else set()
+        lines.append(f"以下 {len(notable)} 个变异位于疾病核心基因内，建议结合基因-表型关系关注：")
         lines.append("")
-        lines.append("| 基因 | 位点 | cDNA | 蛋白 | ClinVar | 影响/类型 | 合子性 | gnomAD AF | 基因贡献 | 外显率 | 标志 |")
-        lines.append("|------|------|------|------|---------|-----------|--------|-----------|----------|--------|------|")
+        lines.append("| 基因 | 与疾病关系 | 位点 | 蛋白 | ClinVar | 影响 | 合子性 | gnomAD AF |")
+        lines.append("|------|------------|------|------|---------|------|--------|-----------|")
         for v in notable:
-            lines.append(_variant_table_row(v, show_clinvar=True))
+            gene = _get(v, "GENE", "gene")
+            gene_ctx = "核心基因" if gene in core_genes_set else "疾病相关"
+            var_id = _variant_id(v)
+            hgvsp = _get(v, "HGVSp", "hgvsp", "primary_hgvsp")
+            clin_sig = _get(v, "clinvar_sig", "CLIN_SIG", "clinvar")
+            impact = _get(v, "IMPACT", "impact", "primary_impact")
+            cons = _get(v, "Consequence", "consequence", "primary_consequence")
+            gt = _get(v, "GT", "gt", "zygosity")
+            gnomad = _get(v, "gnomAD_AF", "gnomad_af")
+            lines.append(
+                f"| {gene} | {gene_ctx} | `{var_id}` | {hgvsp} | "
+                f"{clin_sig} | {impact}/{cons} | {gt} | {gnomad} |"
+            )
+        lines.append("")
     else:
         lines.append("_未检出其他需要特别关注的 Tier 2/3 变异_")
     lines.append("")

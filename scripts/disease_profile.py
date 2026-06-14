@@ -277,11 +277,11 @@ def build_default_contribution_model(mode: str) -> dict[str, Any]:
             "description": "Risk allele with dosage effect (e.g. APOE e4).",
         },
         "gwas_prs": {
-            "scoring": "weighted_sum_beta_x_dosage_normalised_by_sqrt_n",
+            "scoring": "weighted_sum_sqrt_beta_x_dosage",
             "weight": 0.3,
             "description": (
                 "Common variant polygenic contribution; "
-                "normalised by sqrt(variant_count) for cross-disease comparability."
+                "uses sqrt(|beta|) to amplify small-effect variants."
             ),
         },
         "regulatory": {
@@ -291,7 +291,7 @@ def build_default_contribution_model(mode: str) -> dict[str, Any]:
         },
     }
     if mode == "complex":
-        # In complex mode, GWAS/PRS layer is more important.
-        base["gwas_prs"]["weight"] = 0.5
+        # In complex mode, GWAS/PRS layer is the primary signal.
+        base["gwas_prs"]["weight"] = 0.8
         base["mendelian_high"]["weight"] = 0.7
     return base
