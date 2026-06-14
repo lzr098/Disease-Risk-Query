@@ -162,5 +162,23 @@ def test_clinvar_disease_filter_rejects_non_ad_pathogenic():
     assert len(filtered) == 0, "Non-AD pathogenic variants must be filtered out when require_match=True"
 
 
+def test_omim_alzheimer_english_keywords_and_clean_symbols():
+    from gene_set_builder import build_disease_gene_set
+
+    # Chinese disease name but English OMIM keyword (as pipeline now supplies)
+    result = build_disease_gene_set(
+        disease_name="阿尔茨海默病",
+        omim_keywords=["alzheimer disease"],
+        max_genes=200,
+    )
+    omim_genes = set(result["omim_genes"])
+    # Core AD genes should be present
+    assert "APP" in omim_genes
+    assert "PSEN1" in omim_genes
+    # Disease names and locus labels must be cleaned out
+    assert "ALZHEIMER DISEASE" not in omim_genes
+    assert not any("\n" in g for g in omim_genes), "OMIM symbols should not contain embedded newlines"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

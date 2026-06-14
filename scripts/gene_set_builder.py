@@ -202,34 +202,57 @@ class GeneSetBuilder:
         extra_genes = extra_genes or []
         core_genes = core_genes or set()
 
-        # OMIM
-        omim_raw = self.query_omim(omim_keywords, max_genes=max_genes * 4)
-        omim_genes = sorted(omim_raw)
+        # Ensure HGNC is loaded so we can validate symbols for all sources.
+        self._load_hgnc()
 
-        # Standardize all sources
-        standardized_hpo = sorted({self.standardize_symbol(g) for g in hpo_genes})
-        standardized_omim = sorted({self.standardize_symbol(g) for g in omim_genes})
-        standardized_extra = sorted({self.standardize_symbol(g) for g in extra_genes})
-
-        hpo_set = set(standardized_hpo)
-        omim_set = set(standardized_omim)
-        extra_set = set(standardized_extra)
-        merged = hpo_set | omim_set | extra_set
-
-        # Remove common false positives / non-gene strings
         non_gene_blacklist = {
             "ALZHEIMER", "DISEASE", "TYPE", "FORM", "FAMILIAL", "SPORADIC",
             "AMYLOIDOSIS", "CEREBRAL", "DEGENERATIVE", "PROTEIN", "GENE",
             "CHROMOSOME", "LINKED", "ASSOCIATED", "RELATED", "SUSCEPTIBILITY",
         }
-        merged = {
-            g for g in merged
-            if re.match(r"^[A-Za-z0-9\-_\.]+$", g)
-            and len(g) >= 2
-            and not g.isdigit()
-            and not any(word in g.upper() for word in non_gene_blacklist)
-            and (not self._hgnc or g.upper() in self._hgnc)
-        }
+
+        def _is_valid_gene_symbol(symbol: str) -> bool:
+            return (
+                bool(symbol)
+                and re.match(r"^[A-Za-z0-9\-_\.]+$", symbol)
+                and len(symbol) >= 2
+                and not symbol.isdigit()
+                and not any(word in symbol.upper() for word in non_gene_blacklist)
+                and (not self._hgnc or symbol.upper() in self._hgnc)
+            )
+
+        # OMIM
+        omim_raw = self.query_omim(omim_keywords, max_genes=max_genes * 4)
+        # Clean OMIM symbols: the OMIM symbols/text fields often contain disease
+        # names and locus labels (e.g. "ALZHEIMER DISEASE", "10\\nAD10").
+        # Keep only HGNC-valid gene symbols so the reported source count is meaningful.
+        omim_genes = sorted({
+            self.standardize_symbol(g)
+            for g in omim_raw
+            if _is_valid_gene_symbol(self.standardize_symbol(g))
+        })
+
+        # Standardize all sources
+        standardized_hpo = sorted({
+            self.standardize_symbol(g)
+            for g in hpo_genes
+            if _is_valid_gene_symbol(self.standardize_symbol(g))
+        })
+        standardized_omim = sorted({
+            self.standardize_symbol(g)
+            for g in omim_genes
+            if _is_valid_gene_symbol(self.standardize_symbol(g))
+        })
+        standardized_extra = sorted({
+            self.standardize_symbol(g)
+            for g in extra_genes
+            if _is_valid_gene_symbol(self.standardize_symbol(g))
+        })
+
+        hpo_set = set(standardized_hpo)
+        omim_set = set(standardized_omim)
+        extra_set = set(standardized_extra)
+        merged = hpo_set | omim_set | extra_set
 
         # Rank genes by relevance instead of arbitrary alphabetical truncation.
         def _gene_priority(gene: str) -> tuple:

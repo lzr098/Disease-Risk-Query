@@ -153,10 +153,13 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     mendelian_core = ref_core_genes if ref_core_genes else (AD_MENDELIAN_CORE_GENES if "alzheimer" in config.disease_query.lower() else set())
     # Core + GWAS loci from reference serve as literature-backed extra genes
     extra_genes = sorted(set(config.literature_genes or []) | core_genes | ref_gwas_loci)
+    # OMIM titles/symbols are English-only; use the canonical English disease
+    # key for OMIM keyword search so Chinese queries still find OMIM entries.
+    omim_search_term = canonical_key or config.disease_query
     gene_set_result = build_disease_gene_set(
         disease_name=config.disease_query,
         hpo_genes=hpo_result.get("genes") if hpo_id else [],
-        omim_keywords=[config.disease_query],
+        omim_keywords=[omim_search_term],
         extra_genes=extra_genes,
         max_genes=config.max_genes,
         core_genes=core_genes,
