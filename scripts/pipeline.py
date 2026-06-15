@@ -72,6 +72,29 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     work_dir = output_dir / run_id
     work_dir.mkdir(parents=True, exist_ok=True)
 
+    # --- Global pipeline checkpoint ---
+    result_json = work_dir / "result.json"
+    marker = work_dir / ".pipeline_marker"
+    if result_json.exists() and marker.exists():
+        try:
+            input_stat = config.input_vcf.stat()
+            stored = json.loads(marker.read_text())
+            if (stored.get("input_mtime") == input_stat.st_mtime
+                    and stored.get("input_size") == input_stat.st_size
+                    and stored.get("disease") == config.disease_query
+                    and stored.get("offline") == config.offline
+                    and stored.get("spliceai") == config.spliceai):
+                logger.info("Pipeline checkpoint hit — returning cached %s", result_json)
+                cached = json.loads(result_json.read_text())
+                cached["_from_checkpoint"] = True
+                return cached
+            else:
+                logger.info("Pipeline checkpoint stale — re-running")
+                marker.unlink(missing_ok=True)
+        except Exception as exc:
+            logger.warning("Pipeline checkpoint read failed: %s — re-running", exc)
+            marker.unlink(missing_ok=True)
+
     # Step 1: Genome build normalization
     logger.info("Step 1: Detecting genome build")
     build = detect_genome_build(config.input_vcf)
@@ -471,6 +494,23 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     }
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False, default=str)
+
+    # Write pipeline checkpoint marker
+    try:
+        input_stat = config.input_vcf.stat()
+        marker.write_text(
+            json.dumps(
+                {
+                    "input_mtime": input_stat.st_mtime,
+                    "input_size": input_stat.st_size,
+                    "disease": config.disease_query,
+                    "offline": config.offline,
+                    "spliceai": config.spliceai,
+                }
+            )
+        )
+    except Exception as exc:
+        logger.warning("Pipeline marker write failed (non-fatal): %s", exc)
 
     return result
 

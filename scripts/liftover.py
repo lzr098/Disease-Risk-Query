@@ -440,19 +440,31 @@ def validate_ref_alleles(
     mismatches = 0
     failures = 0
 
-    fa_cache: Dict[Tuple[str, int, int], str] = {}
     fasta_has_chr = _fasta_has_chr_prefix(fasta_path)
-    for chrom, pos, ref in sample:
-        try:
-            fa_ref = _query_fasta(chrom, pos, len(ref), fasta_path, fa_cache, fasta_has_chr)
-            if not fa_ref:
+
+    # Parallel FASTA queries via ThreadPool — samtools is I/O bound and
+    # releases the GIL during subprocess calls, so threads are effective.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {
+            pool.submit(
+                _query_fasta, chrom, pos, len(ref), fasta_path, {}, fasta_has_chr
+            ): (chrom, pos, ref)
+            for chrom, pos, ref in sample
+        }
+        for future in as_completed(futures):
+            chrom, pos, ref = futures[future]
+            try:
+                fa_ref = future.result()
+                if not fa_ref:
+                    failures += 1
+                    logger.warning("FASTA returned empty sequence at %s:%s", chrom, pos)
+                elif fa_ref != ref.upper():
+                    mismatches += 1
+            except Exception as exc:
+                logger.warning("FASTA validation failed at %s:%s: %s", chrom, pos, exc)
                 failures += 1
-                logger.warning("FASTA returned empty sequence at %s:%s", chrom, pos)
-            elif fa_ref != ref.upper():
-                mismatches += 1
-        except Exception as exc:
-            logger.warning("FASTA validation failed at %s:%s: %s", chrom, pos, exc)
-            failures += 1
 
     total = len(sample)
     rate = mismatches / total if total else 0.0

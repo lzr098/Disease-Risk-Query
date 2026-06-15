@@ -292,7 +292,10 @@ def generate_report(
             parts.append(f"{label}: {s:.3f}")
     if parts:
         lines.append(f"**分数组成**：{' | '.join(parts)}")
-        lines.append(f"**总分** = Σ min(layer, 1.0) × weight = {contribution.get('overall_score', total/100):.3f}")
+        score_val = contribution.get("overall_score")
+        if score_val is None:
+            score_val = total / 100
+        lines.append(f"**总分** = Σ min(layer, 1.0) × weight = {score_val:.3f}")
     lines.append("")
 
     lines.append("## 1. 执行摘要")

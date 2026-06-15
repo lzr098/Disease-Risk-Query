@@ -104,6 +104,7 @@ class HPOMapper:
         self._hpo_to_genes: dict[str, set[str]] = defaultdict(set)
         self._hpo_to_name: dict[str, str] = {}
         self._loaded = False
+        self._gene_cache: dict[str, list[str]] = {}
 
     def _load(self) -> None:
         if self._loaded:
@@ -227,7 +228,12 @@ class HPOMapper:
 
     def genes_for_hpo(self, hpo_id: str) -> list[str]:
         self._load()
-        return sorted(self._hpo_to_genes.get(hpo_id.upper(), set()))
+        hid = hpo_id.upper()
+        if hid in self._gene_cache:
+            return self._gene_cache[hid]
+        result = sorted(self._hpo_to_genes.get(hid, set()))
+        self._gene_cache[hid] = result
+        return result
 
     def save_curated_cache(self, path: Path = HPO_DISEASE_CACHE) -> None:
         """Persist curated disease->HPO map for offline use."""
