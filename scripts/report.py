@@ -448,6 +448,17 @@ def generate_report(
                 f"本次样本中 {inferred_count} 个未真实检出（已推断为 ref/ref），"
                 "无风险等位基因贡献。_"
             )
+        elif layer == "known_pathogenic" and not items and raw_items:
+            # All known pathogenic variants are ref/ref — report what was checked
+            genes = sorted({x.get("gene", "") for x in raw_items if x.get("gene")})
+            gene_str = "、".join(genes[:5])
+            if len(genes) > 5:
+                gene_str += f"等 {len(genes)} 个基因"
+            lines.append(
+                f"_该疾病模板定义了 {len(raw_items)} 个已知致病位点"
+                f"（{gene_str}），本次样本均未检出（推断为 ref/ref），"
+                "无已知致病突变贡献。_"
+            )
         else:
             lines.extend(_render_layer_table(layer, items, gene_context))
             # For known_pathogenic, add gene function context below table

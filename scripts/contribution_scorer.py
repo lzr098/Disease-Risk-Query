@@ -201,9 +201,26 @@ def _score_known_pathogenic(
     ]
     for kg in pathogenic_vars:
         v = kg.variant
+        if kg.dosage == 0 and not kg.inferred_ref_ref:
+            continue  # legitimately absent
+        gene_w = gene_map.get(v.gene)
+        penetrance_score = gene_w.penetrance_score if gene_w else 0.5
+        confidence = (v.confidence or "moderate").lower()
+
         if kg.dosage == 0 and kg.inferred_ref_ref:
-            continue
-        if kg.dosage == 0:
+            # REF/REF inferred — record for reporting but zero contribution
+            results.append({
+                "rsid": v.rsid or v.vcf_key,
+                "gene": v.gene or "-",
+                "variant": v.vcf_key,
+                "gt": kg.gt,
+                "dosage": 0,
+                "risk_allele": v.effect_allele or v.alt,
+                "contribution": 0.0,
+                "inferred_ref_ref": True,
+                "confidence": v.confidence,
+                "note": v.note or "",
+            })
             continue
         gene_w = gene_map.get(v.gene)
         penetrance_score = gene_w.penetrance_score if gene_w else 0.5
