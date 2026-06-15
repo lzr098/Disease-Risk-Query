@@ -128,7 +128,7 @@ python3 ~/.workbuddy/skills/gpa-disease-risk-query/scripts/main.py \
 | mendelian_mod | 0.8 | 中等外显变异（mendelian_mod 基因中罕见功能变异） |
 | known_pathogenic | 0.9 | 疾病模板中已知致病位点的真实检出（纯合置信度加成） |
 | dosage_risk | 0.5 | 剂量依赖风险等位基因（如 APOE e4） |
-| gwas_prs | 0.3 | GWAS/PRS 多基因信号（按 sqrt(n) 归一化） |
+| gwas_prs | 0.3 | GWAS/PRS 多基因信号；sqrt(\|beta\|) 放大弱效应，√n 归一化 |
 | regulatory | 0.1 | 核心基因调控区罕见变异 |
 
 **总分计算：** `overall = Σ min(layer_score, 1.0) × weight`。如有 mendelian_high 命中，floor 到 0.8。

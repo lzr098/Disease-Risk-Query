@@ -203,9 +203,6 @@ def _score_known_pathogenic(
         v = kg.variant
         if kg.dosage == 0 and not kg.inferred_ref_ref:
             continue  # legitimately absent
-        gene_w = gene_map.get(v.gene)
-        penetrance_score = gene_w.penetrance_score if gene_w else 0.5
-        confidence = (v.confidence or "moderate").lower()
 
         if kg.dosage == 0 and kg.inferred_ref_ref:
             # REF/REF inferred — record for reporting but zero contribution
@@ -300,11 +297,10 @@ def _score_gwas_prs(
     """Weighted polygenic contribution from GWAS lead and PRS variants.
 
     Each variant contributes sqrt(|beta|) × dosage × contribution_score.
-    Using sqrt(|beta|) instead of raw beta amplifies the contribution of
-    small-effect variants (e.g. quantitative-trait GWAS with |beta|~0.02)
-    while preserving effect-direction ordering.  The raw sum is no longer
-    normalised by panel size so genotype differences at individual loci
-    produce visible score changes.
+    Using sqrt(|beta|) amplifies small-effect variants (quantitative-trait
+    GWAS with |beta| ~ 0.02) while preserving effect-direction ordering.
+    The total is normalised by sqrt(n) for cross-disease comparability,
+    with a VCF filter penalty applied when common variants are missing.
     """
     variants = [
         kg for kg in known_genotypes

@@ -9,6 +9,7 @@ The builder supports two paths:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -193,8 +194,26 @@ def build_or_load_profile(
     profile_path = cache_dir / "profile.json"
 
     if profile_path.exists() and not refresh:
-        logger.info("Loading cached DiseaseProfile from %s", profile_path)
-        return DiseaseProfile.from_json(profile_path)
+        # Auto-invalidate cache when the built-in template has changed
+        if canonical and canonical in DISEASE_BUILTIN_REFS:
+            current_hash = hashlib.md5(
+                json.dumps(DISEASE_BUILTIN_REFS[canonical], sort_keys=True).encode()
+            ).hexdigest()
+            hash_path = cache_dir / "profile.template_hash"
+            cached_hash = hash_path.read_text().strip() if hash_path.exists() else None
+            if cached_hash != current_hash:
+                logger.info(
+                    "Built-in template changed for '%s'; rebuilding profile "
+                    "(cached hash %s → current %s)", canonical, cached_hash, current_hash
+                )
+                hash_path.write_text(current_hash)
+                # Fall through to rebuild
+            else:
+                logger.info("Loading cached DiseaseProfile from %s", profile_path)
+                return DiseaseProfile.from_json(profile_path)
+        else:
+            logger.info("Loading cached DiseaseProfile from %s", profile_path)
+            return DiseaseProfile.from_json(profile_path)
 
     profile: DiseaseProfile
     if canonical and canonical in DISEASE_BUILTIN_REFS:
@@ -241,6 +260,14 @@ def build_or_load_profile(
     cache_dir.mkdir(parents=True, exist_ok=True)
     profile.to_json(profile_path)
     logger.info("Saved DiseaseProfile to %s", profile_path)
+
+    # Save template hash for cache invalidation on next load
+    if canonical and canonical in DISEASE_BUILTIN_REFS:
+        current_hash = hashlib.md5(
+            json.dumps(DISEASE_BUILTIN_REFS[canonical], sort_keys=True).encode()
+        ).hexdigest()
+        (cache_dir / "profile.template_hash").write_text(current_hash)
+
     return profile
 
 

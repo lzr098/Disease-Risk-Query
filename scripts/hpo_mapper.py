@@ -83,6 +83,12 @@ DISEASE_TO_HPO: dict[str, str] = {
     "gout": "HP:0001997",
     "高尿酸血症": "HP:0002149",
     "痛风": "HP:0001997",
+    "myocardial infarction": "HP:0001658",
+    "mi": "HP:0001658",
+    "coronary artery disease": "HP:0001658",
+    "cad": "HP:0001658",
+    "coronary heart disease": "HP:0001658",
+    "chd": "HP:0001658",
 }
 
 
@@ -230,7 +236,12 @@ class HPOMapper:
             json.dump(DISEASE_TO_HPO, f, indent=2, ensure_ascii=False)
 
 
+_MAPPER_INSTANCE: Optional[HPOMapper] = None
+
+
 def resolve_disease_query(query: str, hpo_id: Optional[str] = None) -> dict:
-    """Convenience wrapper."""
-    mapper = HPOMapper()
-    return mapper.resolve(query, hpo_id)
+    """Convenience wrapper — reuses a module-level singleton."""
+    global _MAPPER_INSTANCE
+    if _MAPPER_INSTANCE is None:
+        _MAPPER_INSTANCE = HPOMapper()
+    return _MAPPER_INSTANCE.resolve(query, hpo_id)
