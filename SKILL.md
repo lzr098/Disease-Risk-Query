@@ -110,7 +110,7 @@ python3 ~/.workbuddy/skills/gpa-disease-risk-query/scripts/main.py \
 
 运行后在 `--output-dir` 下创建以疾病名命名的子目录，包含：
 
-- `report.md` — 人类可读综合风险报告（含 Domain-dive 升级候选小节）
+- `{疾病名}-YYYYMMDD-report.md` — 人类可读综合风险报告（含 Domain-dive 升级候选小节）
 - `result.json` — 结构化结果（新增 `domain_dive_candidates` 字段）
 - `normalized.vcf.gz` — 归一化后的 GRCh38 VCF
 - `filtered_disease_genes.vcf.gz` — 目标基因区域子集 VCF
