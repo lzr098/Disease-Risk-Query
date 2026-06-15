@@ -331,7 +331,7 @@ def generate_report(
             f"{vcf_qc.get('anchor_snps_checked', 0)} "
             f"({vcf_qc.get('presence_rate', 0):.0%})"
         )
-        lines.append(f"- **VCF 总变异数（近似）**：{vcf_qc.get('total_variants', 'N/A'):,}")
+        lines.append(f"- **VCF 总变异数（近似）**：{vcf_qc.get('total_variants', 0):,}")
         if vcf_qc.get("common_variants_filtered") or vcf_qc.get("likely_filtered"):
             lines.append(
                 "- **常见变异过滤提示**：该 VCF 的锚定位点真实检出率低于阈值，"
