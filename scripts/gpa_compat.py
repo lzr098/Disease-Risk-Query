@@ -84,6 +84,64 @@ def _vep_docker_available() -> bool:
         return False
 
 
+def _vep_marker_path(output_vcf: Path) -> Path:
+    """Return the path of the VEP checkpoint marker file."""
+    return output_vcf.parent / f"{output_vcf.name}.vep_marker"
+
+
+def _vep_output_fresh(input_vcf: Path, output_vcf: Path) -> bool:
+    """Check whether a valid VEP output exists that matches the current input.
+
+    Returns True only when all three conditions hold:
+    1. The output VCF exists and is non-zero.
+    2. The marker file exists and its stored fingerprint (mtime + size) matches
+       the current input VCF.
+    3. The output VCF passes ``gzip -t`` integrity check.
+    """
+    if not output_vcf.exists() or output_vcf.stat().st_size == 0:
+        return False
+
+    marker = _vep_marker_path(output_vcf)
+    if not marker.exists():
+        return False
+
+    try:
+        parts = marker.read_text().strip().split()
+        if len(parts) != 2:
+            return False
+        stored_mtime, stored_size = int(parts[0]), int(parts[1])
+    except (ValueError, OSError):
+        return False
+
+    # Input fingerprint changed → stale output
+    try:
+        st = input_vcf.stat()
+    except OSError:
+        return False
+    if stored_mtime != int(st.st_mtime) or stored_size != st.st_size:
+        return False
+
+    # gzip integrity: detect truncated / corrupt output
+    try:
+        subprocess.run(
+            ["gzip", "-t", str(output_vcf)],
+            capture_output=True, check=True, text=False,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return False
+
+    return True
+
+
+def _write_vep_marker(input_vcf: Path, output_vcf: Path) -> None:
+    """Persist the input fingerprint so the output can be reused later."""
+    try:
+        st = input_vcf.stat()
+        _vep_marker_path(output_vcf).write_text(f"{int(st.st_mtime)} {st.st_size}")
+    except OSError:
+        pass  # non-fatal — worst case VEP runs again next time
+
+
 def pre_annotate_with_vep(
     input_vcf: Path,
     output_vcf: Path,
@@ -99,6 +157,14 @@ def pre_annotate_with_vep(
     input_vcf = Path(input_vcf)
     output_vcf = Path(output_vcf)
     output_vcf.parent.mkdir(parents=True, exist_ok=True)
+
+    # --- Checkpoint resume: skip VEP if output is already fresh ---
+    if _vep_output_fresh(input_vcf, output_vcf):
+        logger.info(
+            "VEP checkpoint hit — output %s matches input %s, skipping annotation",
+            output_vcf.name, input_vcf.name,
+        )
+        return output_vcf
 
     if not _vep_docker_available():
         raise RuntimeError(f"VEP Docker image {VEP_IMAGE} not found. Pull it with: docker pull {VEP_IMAGE}")
@@ -177,6 +243,7 @@ def pre_annotate_with_vep(
             check=True, capture_output=True, text=True,
         )
         subprocess.run(["bcftools", "index", str(gz_path)], check=True, capture_output=True, text=True)
+        _write_vep_marker(input_vcf, gz_path)
         return gz_path
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
