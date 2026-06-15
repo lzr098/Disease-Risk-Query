@@ -142,7 +142,7 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
 
     if not profile.gene_set:
         # No genes found; produce empty report
-        report_path = work_dir / f"{config.disease_query}-{datetime.now().strftime('%Y%m%d')}-report.md"
+        report_path = work_dir / f"{config.disease_query.replace(' ', '_')}-{datetime.now().strftime('%Y%m%d')}-report.md"
         empty_gpa = {
             "tier1_variants": [],
             "tier2_variants": [],
@@ -400,7 +400,7 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     }
 
     # Generate report
-    report_path = work_dir / "report.md"
+    report_path = work_dir / f"{config.disease_query.replace(' ', '_')}-{datetime.now().strftime('%Y%m%d')}-report.md"
     legacy_gwas_lead_snps = _known_genotypes_to_legacy_gwas(known_genotypes)
 
     # Build disease space stats for report
