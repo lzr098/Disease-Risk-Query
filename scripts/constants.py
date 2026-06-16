@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+import sys as _sys
 from pathlib import Path
 
 # Base directories
@@ -172,6 +174,10 @@ DISEASE_CLINVAR_KEYWORDS: dict[str, list[str]] = {
         "hyperuricemia", "gout", "gouty arthritis", "urate",
         "uric acid", "nephrolithiasis", "urolithiasis", "kidney stone",
         "renal hypouricemia", "uric acid nephrolithiasis",
+    ],
+    "type 2 diabetes": [
+        "type 2 diabetes", "t2d", "t2dm", "maturity onset diabetes",
+        "mody", "non-insulin dependent diabetes", "niddm", "diabetes",
     ],
 }
 
@@ -9282,6 +9288,21 @@ DISEASE_BUILTIN_REFS: dict[str, dict] = {'alzheimer disease': {'aliases': ['alzh
 }
 BUILTIN_DISEASE_KEYS = set(DISEASE_BUILTIN_REFS.keys())
 
+# ── Load external disease templates ──
+_ext_dir = WORKBUDDY_SKILL / "references" / "disease_templates"
+if _ext_dir.is_dir():
+    for _f in sorted(_ext_dir.glob("*.py")):
+        try:
+            _sn = _f.stem
+            _spec = importlib.util.spec_from_file_location(f"_disease_template_{_sn}", _f)
+            _mod = importlib.util.module_from_spec(_spec)
+            _sys.modules[_spec.name] = _mod
+            _spec.loader.exec_module(_mod)
+            if hasattr(_mod, "TEMPLATE_NAME") and hasattr(_mod, "TEMPLATE"):
+                DISEASE_BUILTIN_REFS[_mod.TEMPLATE_NAME] = _mod.TEMPLATE
+        except Exception:
+            pass
+
 # Keywords used in auto mode to classify a disease as complex-trait.
 COMPLEX_DISEASE_KEYWORDS = [
     "hyperuricemia", "gout", "urate",
@@ -9345,6 +9366,13 @@ DISEASE_NAME_ALIASES: dict[str, str] = {
     "coronary heart disease": "myocardial infarction",
     "chd": "myocardial infarction",
     "fh": "myocardial infarction",
+    "type 2 diabetes": "type 2 diabetes",
+    "t2d": "type 2 diabetes",
+    "t2dm": "type 2 diabetes",
+    "diabetes mellitus type 2": "type 2 diabetes",
+    "niddm": "type 2 diabetes",
+    "二型糖尿病": "type 2 diabetes",
+    "2型糖尿病": "type 2 diabetes",
 }
 
 
