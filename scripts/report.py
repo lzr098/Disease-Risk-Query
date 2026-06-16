@@ -249,6 +249,8 @@ def generate_report(
     disease_mode: str = "mendelian",
     domain_dive_candidates: Optional[list[dict]] = None,
     disease_space: Optional[dict] = None,
+    is_genotyped: Optional[bool] = None,
+    genotyping_info: Optional[dict] = None,
 ) -> Path:
     """Generate the final Markdown disease contribution report.
 
@@ -313,6 +315,30 @@ def generate_report(
     lines.append("")
 
     lines.append("### VCF 质量与分析统计")
+    # Genotyping status banner
+    if is_genotyped is not None:
+        if is_genotyped:
+            lines.append(
+                "- **VCF Genotyping 状态**：✅ **Genotyped 样本级 VCF** — "
+                "VCF 中未出现的位点一律推断为 REF/REF (0/0)"
+            )
+            if genotyping_info:
+                sname = genotyping_info.get("sample_name", "unknown")
+                nsamples = genotyping_info.get("n_samples", 0)
+                gtr = genotyping_info.get("gt_non_missing_ratio", 0)
+                lines.append(
+                    f"  - 样本: {sname}, 样本数: {nsamples}, "
+                    f"GT 非缺失率: {gtr:.1%} (检测方法: {genotyping_info.get('method', 'auto')})"
+                )
+        else:
+            lines.append(
+                "- **VCF Genotyping 状态**：⚠️ **非 Genotyped VCF** — "
+                "VCF 中未出现的位点**不能安全推断为 REF/REF**，"
+                "可能为数据缺失而非参考基因型。评分解读不可靠！"
+            )
+            if genotyping_info and genotyping_info.get("note"):
+                lines.append(f"  - {genotyping_info['note']}")
+        lines.append("")
     ds = disease_space or {}
     if ds:
         total_vcf = ds.get("total_variants", vcf_qc.get("total_variants", "N/A") if vcf_qc else "N/A")
@@ -324,11 +350,25 @@ def generate_report(
         lines.append(f"- **本次分析纳入**：{analyzed:,} 个（过滤至疾病相关基因区域）")
         if kv_queried:
             lines.append(f"- **关键 SNP 查询**：{kv_queried} 个已知风险位点，其中 {kv_found} 个真实检出 + {kv_inferred} 个未 call 到（按 ref/ref 推断）")
-        lines.append(
-            "- **解读原则**：未 call 到的位点一律推断为 ref/ref（0/0），"
-            "需注意前序 genotyping 及过滤流程的可靠性。"
-            "常见 SNP 未保留提示上游可能经过硬过滤，多基因贡献评估可能存在低估。"
-        )
+        # Interpretation principle differs based on genotyping status
+        if is_genotyped:
+            lines.append(
+                "- **解读原则**：该 VCF 已确认为 genotyped 样本级 VCF。"
+                "未 call 到的位点一律推断为 ref/ref（0/0），不存在\u201c数据缺失\u201d状态。"
+                "常见 SNP 未保留提示上游可能经过硬过滤，多基因贡献评估可能存在低估。"
+            )
+        elif is_genotyped is False:
+            lines.append(
+                "- **解读原则**：⚠️ 该 VCF 未确认为 genotyped 样本级 VCF。"
+                "未 call 到的位点**不能安全推断为 ref/ref**，"
+                "可能反映数据缺失而非参考基因型。评分解读需谨慎！"
+            )
+        else:
+            lines.append(
+                "- **解读原则**：未 call 到的位点一律推断为 ref/ref（0/0），"
+                "需注意前序 genotyping 及过滤流程的可靠性。"
+                "常见 SNP 未保留提示上游可能经过硬过滤，多基因贡献评估可能存在低估。"
+            )
     elif vcf_qc and vcf_qc.get("checked"):
         lines.append(
             f"- **锚定位点真实检出率**：{vcf_qc.get('anchor_snps_present', 0)} / "

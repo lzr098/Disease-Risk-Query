@@ -25,6 +25,106 @@ from gwas_source import get_gwas_lead_snps
 logger = logging.getLogger(__name__)
 
 
+def detect_vcf_genotyping(vcf_path: Path) -> dict:
+    """Step 0: Detect whether a VCF is a genotyped sample-level VCF.
+
+    A genotyped VCF must have:
+    1. FORMAT/<ID=GT> in the header
+    2. A sample column in the header line (last field of #CHROM line)
+    3. GT values that are not all missing (.)
+
+    Returns dict with:
+    - is_genotyped: bool
+    - has_gt_format: bool
+    - has_sample_column: bool
+    - sample_name: str or None
+    - n_samples: int
+    - gt_non_missing_ratio: float (checked on first 200 variants)
+    - method: 'auto' | 'user_override_genotyped' | 'user_override_not_genotyped'
+    - note: str
+    """
+    has_gt_format = False
+    has_sample_column = False
+    sample_name = None
+    n_samples = 0
+
+    # Read header to check FORMAT/GT and sample columns
+    header_proc = subprocess.run(
+        ["bcftools", "view", "-h", str(vcf_path)],
+        capture_output=True, text=True, check=False,
+    )
+
+    for line in header_proc.stdout.split("\n"):
+        if line.startswith("##FORMAT=<ID=GT"):
+            has_gt_format = True
+        if line.startswith("#CHROM"):
+            parts = line.rstrip().split("\t")
+            # Standard VCF: 8 fixed columns + FORMAT + samples
+            # #CHROM POS ID REF ALT QUAL FILTER INFO FORMAT Sample1 ...
+            n_samples = max(0, len(parts) - 9)
+            if n_samples > 0:
+                has_sample_column = True
+                sample_name = parts[9]  # First sample name
+
+    # Check GT non-missing ratio on first 200 variants
+    gt_non_missing = 0
+    total_checked = 0
+    if has_gt_format and has_sample_column:
+        data_proc = subprocess.run(
+            ["bcftools", "view", "-H", str(vcf_path)],
+            capture_output=True, text=True, check=False,
+        )
+        for line in data_proc.stdout.split("\n")[:200]:
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 10:
+                # FORMAT field is index 8, sample data starts at index 9
+                gt_field = parts[9].split(":")[0]  # First sub-field is GT
+                if gt_field and gt_field != "." and gt_field != "./." and gt_field != ".|.":
+                    gt_non_missing += 1
+                total_checked += 1
+
+    gt_ratio = gt_non_missing / total_checked if total_checked > 0 else 0.0
+    is_genotyped = has_gt_format and has_sample_column and gt_ratio > 0.5
+
+    note = ""
+    if is_genotyped:
+        note = (
+            f"Genotyped VCF detected: FORMAT/GT present, {n_samples} sample(s) "
+            f"({sample_name or 'unknown'}), GT non-missing ratio {gt_ratio:.1%} "
+            f"({gt_non_missing}/{total_checked} checked). "
+            "Missing positions will be treated as REF/REF."
+        )
+    else:
+        reasons = []
+        if not has_gt_format:
+            reasons.append("no FORMAT/GT field")
+        if not has_sample_column:
+            reasons.append("no sample column")
+        if has_gt_format and has_sample_column and gt_ratio <= 0.5:
+            reasons.append(f"GT non-missing ratio only {gt_ratio:.1%}")
+        note = (
+            f"NOT a genotyped VCF: {', '.join(reasons)}. "
+            "Missing positions CANNOT be safely treated as REF/REF — "
+            "they may represent data gaps rather than reference genotypes. "
+            "Score interpretation will be unreliable."
+        )
+
+    return {
+        "is_genotyped": is_genotyped,
+        "has_gt_format": has_gt_format,
+        "has_sample_column": has_sample_column,
+        "sample_name": sample_name,
+        "n_samples": n_samples,
+        "gt_non_missing_ratio": round(gt_ratio, 3),
+        "gt_non_missing": gt_non_missing,
+        "total_checked": total_checked,
+        "method": "auto",
+        "note": note,
+    }
+
+
 def _detect_vcf_chrom_style(vcf_path: Path) -> str:
     """Return 'chr' if VCF contigs start with 'chr', else 'no_chr'."""
     result = subprocess.run(

@@ -31,7 +31,7 @@ from liftover import detect_genome_build, liftover_vcf, validate_ref_alleles
 from report import generate_report
 from tier_filters import denoise_tier3, remove_duplicate_variants
 from variant_domain_dive import run_domain_dive_for_variants
-from vcf_filter import build_gene_coordinates_cache, check_vcf_completeness
+from vcf_filter import build_gene_coordinates_cache, check_vcf_completeness, detect_vcf_genotyping
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,8 @@ class PipelineConfig:
     disease_mode: str = DEFAULT_DISEASE_MODE
     gwas_enabled: bool = True
     literature_enabled: bool = True
+    assume_genotyped: bool = False
+    assume_not_genotyped: bool = False
 
 
 def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
@@ -94,6 +96,39 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         except Exception as exc:
             logger.warning("Pipeline checkpoint read failed: %s — re-running", exc)
             marker.unlink(missing_ok=True)
+
+    # Step 0: VCF genotyping status detection
+    logger.info("Step 0: Detecting VCF genotyping status")
+    genotyping_info = detect_vcf_genotyping(config.input_vcf)
+
+    # Apply user overrides
+    if config.assume_genotyped:
+        genotyping_info["is_genotyped"] = True
+        genotyping_info["method"] = "user_override_genotyped"
+        genotyping_info["note"] = (
+            "User explicitly specified --assume-genotyped. "
+            "Missing positions will be treated as REF/REF."
+        )
+        logger.info("Genotyping status overridden by user: genotyped")
+    elif config.assume_not_genotyped:
+        genotyping_info["is_genotyped"] = False
+        genotyping_info["method"] = "user_override_not_genotyped"
+        genotyping_info["note"] = (
+            "User explicitly specified --assume-not-genotyped. "
+            "Missing positions CANNOT be safely treated as REF/REF."
+        )
+        logger.info("Genotyping status overridden by user: NOT genotyped")
+
+    is_genotyped = genotyping_info["is_genotyped"]
+    logger.info("VCF genotyping status: is_genotyped=%s, method=%s", is_genotyped, genotyping_info["method"])
+
+    if not is_genotyped:
+        logger.warning(
+            "⚠️ VCF appears NOT genotyped: %s. "
+            "Score interpretation may be unreliable — "
+            "missing positions may be data gaps, not REF/REF.",
+            genotyping_info.get("note", ""),
+        )
 
     # Step 1: Genome build normalization
     logger.info("Step 1: Detecting genome build")
@@ -196,6 +231,8 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
             apoe_result=None,
             vcf_qc=vcf_qc,
             disease_mode=disease_mode,
+            is_genotyped=is_genotyped,
+            genotyping_info=genotyping_info,
         )
         return {
             "success": True,
@@ -456,6 +493,8 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         disease_mode=disease_mode,
         domain_dive_candidates=domain_dive_candidates,
         disease_space=disease_space,
+        is_genotyped=is_genotyped,
+        genotyping_info=genotyping_info,
     )
 
     # Save structured JSON
@@ -464,6 +503,8 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         "success": True,
         "hpo_id": hpo_id,
         "hpo_name": hpo_name,
+        "is_genotyped": is_genotyped,
+        "genotyping_info": genotyping_info,
         "input_vcf": str(config.input_vcf),
         "normalized_vcf": str(normalized_vcf),
         "filtered_vcf": str(filtered_vcf),

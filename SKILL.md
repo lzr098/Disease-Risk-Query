@@ -12,11 +12,38 @@ agent_created: true
 
 # gpa-disease-risk-query: 单样本疾病遗传风险查询
 
+## ⚠️ 前置原则：VCF Genotyping 检验
+
+**在运行任何 pipeline 步骤之前，必须先判断输入 VCF 是否为 genotyping 后的样本级 VCF。**
+
+判定方法（Step 0 自动执行）：
+- VCF header 包含 `FORMAT/<ID=GT>` 字段 → 有基因型信息
+- VCF header 有 sample 列（`#CHROM…` 行最后一列非空）→ 单样本 VCF
+- 变异行中 GT 字段值不为 `.`（非缺失）→ 样本已 genotyped
+
+**判定结果与后续处理**：
+
+| VCF 类型 | 处理原则 | 对评分的影响 |
+|----------|----------|-------------|
+| **Genotyped 样本级 VCF** | VCF 中未出现的位点一律推断为 **REF/REF (0/0)**，不存在"数据缺失"状态 | GWAS/PRS/dosage 维度中未检出的风险等位基因 → 按 ref/ref 计（无风险等位基因贡献），但会标注"推断 ref/ref" |
+| **非 genotyped VCF**（如 joint-call 多样本 VCF、variant-only VCF） | **⚠️ 警告用户**：该 VCF 未完成样本级 genotyping，位点缺失可能反映"未检测"而非"ref/ref"，评分不可靠 | pipeline 仍可运行，但报告会标注 `is_genotyped=false`，建议用户提供 genotyped 后的单样本 VCF |
+
+**硬性规则**（genotyped VCF 下）：
+1. GWAS lead SNP 未出现 → ref/ref，不得标记为"未检出/无法推断"
+2. ClinVar 致病位点未出现 → ref/ref
+3. APOE ε4 tag SNP 未出现 → ref/ref（ε4 剂量 = 0）
+4. 复杂表型 GWAS 风险等位基因未出现 → ref/ref，按无风险等位基因计
+
+此原则贯穿所有评分层级，任何违反此规则的代码或报告表述均为 bug。
+
+---
+
 ## 概述
 
-本 Skill 实现以下 8 步 pipeline：
+本 Skill 实现以下 9 步 pipeline：
 
 ```
+Step 0:   VCF Genotyping 状态检测（GT 字段 + sample 列 → is_genotyped 标记）
 Step 1:   参考基因组归一化 (build detect + liftover + REF 校验 + VCF 完整性检测)
 Step 2/3: 疾病意图澄清 → HPO 映射 → DiseaseProfile 构建（统一疾病空间）
 Step 4:   统一疾病空间查询（基因区域 + 已知变异 + 调控区 → VCF 过滤）
@@ -104,6 +131,8 @@ python3 ~/.workbuddy/skills/gpa-disease-risk-query/scripts/main.py \
 | `--literature-genes` | 否 | — | 逗号分隔文献基因 |
 | `--literature-variants` | 否 | — | 文献变异 JSON 文件 |
 | `--disease-mode` | 否 | auto | `mendelian` / `complex` / `auto`；见下方评分模式 |
+| `--assume-genotyped` | 否 | false | 强制认定 VCF 为 genotyped（跳过 Step 0 检测；缺失位点按 ref/ref） |
+| `--assume-not-genotyped` | 否 | false | 强制认定 VCF 为非 genotyped（报告中警告；缺失位点不可安全推断） |
 | `--preflight` | 否 | — | 只运行依赖检查 |
 
 ## 输出

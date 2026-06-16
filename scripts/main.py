@@ -49,6 +49,8 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--preflight", action="store_true", help="Run dependency checks and exit")
+    parser.add_argument("--assume-genotyped", action="store_true", help="Assume VCF is genotyped (skip Step 0 detection; missing sites treated as ref/ref)")
+    parser.add_argument("--assume-not-genotyped", action="store_true", help="Assume VCF is NOT genotyped (warn in report; missing sites may be data gaps)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
     return parser
 
@@ -188,6 +190,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         disease_mode=args.disease_mode,
         gwas_enabled=not args.no_gwas,
         literature_enabled=not args.no_literature,
+        assume_genotyped=args.assume_genotyped,
+        assume_not_genotyped=args.assume_not_genotyped,
     )
 
     try:
@@ -205,6 +209,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "success": True,
         "hpo_id": result.get("hpo_id"),
         "hpo_name": result.get("hpo_name"),
+        "is_genotyped": result.get("is_genotyped"),
         "gene_count": result["gene_set"]["total"],
         "gene_set_truncated": result["gene_set"].get("truncated", False),
         "tier1": len(result["gpa"].get("tier1_variants", [])),
