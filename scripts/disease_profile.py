@@ -162,6 +162,7 @@ class DiseaseProfile:
     known_pathogenic_variants: list[VariantWeight] = field(default_factory=list)
     gwas_lead_snps: list[VariantWeight] = field(default_factory=list)
     prs_variants: list[VariantWeight] = field(default_factory=list)
+    prs_variants_high: list[VariantWeight] = field(default_factory=list)
     regulatory_regions: list[RegulatoryRegion] = field(default_factory=list)
     key_regions: dict[str, GeneDomainInfo] = field(default_factory=dict)
     key_literature: list[dict] = field(default_factory=list)
@@ -177,6 +178,7 @@ class DiseaseProfile:
             self.known_pathogenic_variants
             + self.gwas_lead_snps
             + self.prs_variants
+            + self.prs_variants_high
         )
 
     @property
@@ -217,6 +219,7 @@ class DiseaseProfile:
             "known_pathogenic_variants": [v.to_dict() for v in self.known_pathogenic_variants],
             "gwas_lead_snps": [v.to_dict() for v in self.gwas_lead_snps],
             "prs_variants": [v.to_dict() for v in self.prs_variants],
+            "prs_variants_high": [v.to_dict() for v in self.prs_variants_high],
             "regulatory_regions": [r.to_dict() for r in self.regulatory_regions],
             "key_regions": {k: v.to_dict() for k, v in self.key_regions.items()},
             "key_literature": self.key_literature,
@@ -238,6 +241,7 @@ class DiseaseProfile:
             known_pathogenic_variants=[VariantWeight.from_dict(v) for v in data.get("known_pathogenic_variants", [])],
             gwas_lead_snps=[VariantWeight.from_dict(v) for v in data.get("gwas_lead_snps", [])],
             prs_variants=[VariantWeight.from_dict(v) for v in data.get("prs_variants", [])],
+            prs_variants_high=[VariantWeight.from_dict(v) for v in data.get("prs_variants_high", [])],
             regulatory_regions=[RegulatoryRegion.from_dict(r) for r in data.get("regulatory_regions", [])],
             key_regions={k: GeneDomainInfo.from_dict(v) for k, v in data.get("key_regions", {}).items()},
             key_literature=list(data.get("key_literature", [])),
@@ -282,6 +286,14 @@ def build_default_contribution_model(mode: str) -> dict[str, Any]:
             "description": (
                 "Common variant polygenic contribution; "
                 "uses sqrt(|beta|) to amplify small-effect variants."
+            ),
+        },
+        "prs_high": {
+            "scoring": "high_confidence_prs_weighted_sum",
+            "weight": 0.9,
+            "description": (
+                "High-confidence PRS variants from validated "
+                "polygenic risk scores with published weights."
             ),
         },
         "regulatory": {

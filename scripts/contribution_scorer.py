@@ -352,6 +352,43 @@ def _score_gwas_prs(
     }
 
 
+def _score_prs_high(
+    profile: DiseaseProfile,
+    known_genotypes: list[KnownVariantGenotype],
+    vcf_qc: dict,
+) -> float:
+    """High-confidence PRS variants with published weights.
+    
+    These are PRS variants from validated polygenic risk scores with
+    independently replicated weights. Scored as beta x dosage x CS
+    (no sqrt amplification, as these have verified effect sizes).
+    """
+    variants = [
+        kg for kg in known_genotypes
+        if kg.variant.variant_class == "prs_high"
+    ]
+    if not variants:
+        return 0.0
+
+    total = 0.0
+    for kg in variants:
+        v = kg.variant
+        beta = v.beta or (math.log(v.or_value) if v.or_value else 0.0)
+        weight = v.contribution_score
+        contribution = beta * kg.dosage * weight
+        total += contribution
+
+    # Normalise by sqrt(n)
+    n = max(len(variants), 1)
+    total = total / math.sqrt(n)
+
+    # Apply VCF filter penalty
+    if vcf_qc.get("likely_filtered"):
+        total *= 0.6  # PRS SNPs often common, may be filtered
+    
+    return abs(total)
+
+
 def _score_regulatory(
     profile: DiseaseProfile,
     tiered: dict[str, list[dict]],
@@ -478,6 +515,9 @@ def score(
     result.regulatory = _score_regulatory(profile, tiered_variants)
     result.clinvar_enriched = _collect_clinvar_enriched(tiered_variants)
 
+    # High-confidence PRS layer
+    prs_high_score = _score_prs_high(profile, known_genotypes, vcf_qc)
+
     # Combine into overall score using model weights
     model = profile.contribution_model or {}
     high_score = sum(x["contribution"] for x in result.mendelian_high)
@@ -491,6 +531,7 @@ def score(
         "mendelian_high": model.get("mendelian_high", {}).get("weight", 1.0),
         "mendelian_mod": model.get("mendelian_mod", {}).get("weight", 0.8),
         "known_pathogenic": model.get("known_pathogenic", {}).get("weight", 0.9),
+        "prs_high": model.get("prs_high", {}).get("weight", 0.9),
         "dosage_risk": model.get("dosage_risk", {}).get("weight", 0.5),
         "gwas_prs": model.get("gwas_prs", {}).get("weight", 0.3),
         "regulatory": model.get("regulatory", {}).get("weight", 0.1),
@@ -502,6 +543,7 @@ def score(
         + min(known_score, 1.0) * weights["known_pathogenic"]
         + min(dosage_score, 1.0) * weights["dosage_risk"]
         + min(gwas_score, 1.0) * weights["gwas_prs"]
+        + min(prs_high_score, 1.0) * weights["prs_high"]
         + min(reg_score, 1.0) * weights["regulatory"]
     )
 
@@ -518,6 +560,7 @@ def score(
         "known_pathogenic": _layer_level(known_score, "known_pathogenic", profile),
         "dosage_risk": _layer_level(dosage_score, "dosage_risk", profile),
         "gwas_prs": _layer_level(gwas_score, "gwas_prs", profile),
+        "prs_high": _layer_level(prs_high_score, "prs_high", profile),
         "regulatory": _layer_level(reg_score, "regulatory", profile),
     }
 
@@ -527,6 +570,7 @@ def score(
         {"layer": "known_pathogenic", "count": len(result.known_pathogenic), "score": round(known_score, 3)},
         {"layer": "dosage_risk", "count": len(result.dosage_risk), "score": round(dosage_score, 3)},
         {"layer": "gwas_prs", "count": result.gwas_prs["variant_count"], "score": round(gwas_score, 3)},
+        {"layer": "prs_high", "count": len([kg for kg in known_genotypes if kg.variant.variant_class == "prs_high"]), "score": round(prs_high_score, 3)},
         {"layer": "regulatory", "count": len(result.regulatory), "score": round(reg_score, 3)},
         {"layer": "clinvar_enriched", "count": len(result.clinvar_enriched), "score": 0.0},
     ]

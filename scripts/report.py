@@ -28,6 +28,7 @@ _LAYER_LABELS = {
     "known_pathogenic": "已知致病位点（模板）",
     "dosage_risk": "剂量风险位点",
     "gwas_prs": "GWAS / PRS 贡献",
+    "prs_high": "高置信 PRS 位点",
     "regulatory": "调控区罕见变异",
     "clinvar_enriched": "ClinVar 注释变异",
 }

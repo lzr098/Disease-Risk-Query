@@ -52,6 +52,7 @@ def _normalize_builtin_ref(key: str, ref: dict[str, Any]) -> dict[str, Any]:
         "known_pathogenic_variants": list(ref.get("known_pathogenic_variants", [])),
         "gwas_lead_snps": list(ref.get("gwas_lead_snps", [])),
         "prs_variants": list(ref.get("prs_variants", [])),
+        "prs_variants_high": list(ref.get("prs_variants_high", [])),
         "regulatory_regions": [],
         "key_regions": {},
         "key_literature": list(ref.get("key_literature", [])),
