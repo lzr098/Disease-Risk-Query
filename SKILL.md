@@ -281,5 +281,5 @@ gpa-disease-risk-query/
     gene_set_builder.py      # 基因集构建（legacy）
     constants.py             # 常量与疾病内置 refs
     gwas_source.py           # GWAS lead SNP 查询
-  references/                # 运行时缓存
+  references/                # 运行时缓存 + 模板规范
   tests/                     # 测试
