@@ -259,6 +259,113 @@ python scripts/analyze_variant.py \
 
 ---
 
+## 疾病风险查询 — 内置模板管理
+
+除了单变异分析，本仓库也提供**疾病级基因组风险查询** (`gpa-disease-risk-query` skill)。它基于预置疾病模板 + 多源基因集自动构建，完成从 VCF 到分层风险报告的完整流程。
+
+### 已有内置模板
+
+| 疾病 | 模式 | 基因数 | 已知致病位点 | GWAS SNP | 文献 |
+|------|------|--------|-------------|----------|------|
+| Alzheimer disease | mixed | 245 | 13 | 77 | 10 |
+| Parkinson disease | mixed | 170 | 10 | 39 | 6 |
+| Adult vision disorders | complex | 83 | 10 | 56 | 5 |
+| Hyperuricemia / Gout | complex | 69 | 8 | 40 | 10 |
+| Myocardial infarction / CAD | complex | 54 | 8 | 37 | 4 |
+
+每个模板包含：
+- **基因集** — 按 Mendelian / GWAS 分层，标注外显率、贡献权重、证据类型
+- **已知致病位点** — 精选 ClinVar P/LP + OMIM + 文献位点，附基因型贡献说明
+- **GWAS lead SNP** — 来自最大规模 GWAS 的效应等位基因、OR/beta、人群频率
+- **关键蛋白域** — 突变热点结构注释（如 APOB 受体结合域、DES Tail 域）
+- **关键文献** — PMID + 疾病关联证据
+
+### 如何添加新疾病模板
+
+将模板定义写入 `scripts/constants.py` 的 `DISEASE_BUILTIN_REFS` 字典。格式参考已有模板：
+
+```python
+DISEASE_BUILTIN_REFS = {
+    ...
+    "colon cancer": {
+        "aliases": ["colon cancer", "colorectal cancer", "crc"],
+        "mode": "complex",
+        "gene_set": [
+            {"gene": "APC", "tier": "mendelian_high", "contribution_score": 1.0,
+             "penetrance": ">0.95", "penetrance_score": 0.95, "evidence": "familial",
+             "note": "FAP / Lynch syndrome core gene"},
+            {"gene": "TP53", "tier": "mendelian_high", ...},
+            ...
+        ],
+        "known_pathogenic_variants": [...],
+        "gwas_lead_snps": [...],
+        "key_literature": [...],
+    }
+}
+```
+
+同时更新两个映射表：
+
+1. **`DISEASE_NAME_ALIASES`** — 中文/英文别名 → 规范名
+2. **`COMPLEX_DISEASE_KEYWORDS`** — 用于 `complex` 模式的疾病关键词列表
+
+### 未匹配疾病的处理流程
+
+当用户查询的疾病**没有**内置模板时，系统自动走动态构建路径：
+
+```
+用户输入 "亨廷顿病"
+    │
+    ├─ 1. 别名匹配 ─── 找到 hpo → 映射 HP:0002072
+    │
+    ├─ 2. HPO 基因提取 ─── genes_for_hpo("HP:0002072") → HTT, JPH3, ...
+    │
+    ├─ 3. OMIM 关键词检索 ─── 本地 omim.db 全文检索 "huntington"
+    │
+    ├─ 4. ClinVar 安全网 ─── 提取 P/LP 位点补充基因集
+    │
+    ├─ 5. 文献动态检索 ─── PubMed API 提取近年关键文献
+    │
+    └─ 6. DiseaseProfile 构建 → 自动评分 → 报告
+```
+
+**关键决策点：**
+
+| 场景 | 行为 |
+|------|------|
+| 疾病名匹配内置模板 | 使用预置基因集，**不**额外查询 OMIM/HPO（保持模板整洁和快速） |
+| 疾病名未匹配但有 HPO 映射 | 动态构建：HPO → OMIM → ClinVar → 文献 |
+| 疾病名完全没有匹配 | 以用户输入作为关键词，直接从 OMIM + PubMed 检索 |
+| 想要强制动态扩展 | 使用 `--enrich` 参数，即便是内置模板也会叠加 HPO/OMIM 基因 |
+
+**常见中文输入映射：**
+
+```
+阿尔茨海默病 / AD       → alzheimer disease
+帕金森 / PD             → parkinson disease
+高尿酸血症 / 痛风        → hyperuricemia
+心肌梗死 / 冠心病 / CAD  → myocardial infarction
+视力下降 / 黄斑变性      → adult vision disorders
+```
+
+### 审查与迭代
+
+模板通过独立的 **`validate_disease_templates.py`** 脚本进行自动化校验：
+
+- 必需字段完整性检查（gene_set, known_pathogenic_variants 等）
+- 重复基因/rsID 检测（允许同 rsID 不同等位基因）
+- REF 等位基因一致性（vs GRCh38 FASTA）
+- 贡献评分合理性范围检查
+
+每次模板修改后运行验证：
+
+```bash
+cd ~/.workbuddy/skills/gpa-disease-risk-query
+python scripts/validate_disease_templates.py
+```
+
+---
+
 ## 目录结构
 
 ```
