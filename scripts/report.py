@@ -77,12 +77,16 @@ def _variant_table_row(v: dict, show_clinvar: bool = False, gene_context: dict[s
 
     gene_contrib = raw.get("_gene_contribution")
     gene_pen = raw.get("_gene_penetrance")
+    phenotype = raw.get("_phenotype_assoc", "")
+    clingen = raw.get("_clingen_validity", "")
     contrib_str = f"{gene_contrib}" if gene_contrib is not None else "-"
     pen_str = gene_pen or "-"
 
     ctx = ""
     if gene_context and gene in gene_context:
         ctx = gene_context[gene]
+    elif phenotype:
+        ctx = phenotype
 
     if show_clinvar:
         return (
@@ -405,9 +409,11 @@ def generate_report(
         lines.append(f"- **基因列表（前 30）**：{', '.join(genes[:30])}{' ...' if len(genes) > 30 else ''}")
     lines.append("")
 
-    # Enrich variants with template-based gene contribution / penetrance
+    # Enrich variants with template-based gene contribution / penetrance / phenotype / domains
     gene_contribution_map = (disease_reference or {}).get("gene_contribution_map", {})
     gene_penetrance_map = (disease_reference or {}).get("gene_penetrance_map", {})
+    gene_phenotype_map = (disease_reference or {}).get("gene_phenotype_map", {})
+    gene_clingen_map = (disease_reference or {}).get("gene_clingen_map", {})
     for v in (
         gpa_result.get("tier1_variants", [])
         + gpa_result.get("tier2_variants", [])
@@ -417,6 +423,8 @@ def generate_report(
         if gene and gene in gene_contribution_map:
             v["_gene_contribution"] = gene_contribution_map[gene]
             v["_gene_penetrance"] = gene_penetrance_map.get(gene, "")
+            v["_phenotype_assoc"] = gene_phenotype_map.get(gene, "")
+            v["_clingen_validity"] = gene_clingen_map.get(gene, "")
 
     # 4. Layered findings
     lines.append("## 4. 分层发现")
@@ -466,8 +474,15 @@ def generate_report(
     # Build gene-context lookup for table annotations and gene descriptions
     gene_context: dict[str, str] = {}
     core_genes_set = set(disease_reference.get("core_genes", [])) if disease_reference else set()
+    gene_phenotype_map = (disease_reference or {}).get("gene_phenotype_map", {})
+    gene_clingen_map = (disease_reference or {}).get("gene_clingen_map", {})
     for g in core_genes_set:
-        gene_context[g] = "疾病核心基因"
+        desc_parts = []
+        if g in gene_phenotype_map:
+            desc_parts.append(gene_phenotype_map[g])
+        if g in gene_clingen_map:
+            desc_parts.append(f"[{gene_clingen_map[g]}]")
+        gene_context[g] = "；".join(desc_parts) if desc_parts else "疾病核心基因"
 
     for layer in layer_order:
         label = _LAYER_LABELS[layer]

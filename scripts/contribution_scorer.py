@@ -10,6 +10,14 @@ generic pathogenicity. Supports multiple layers:
 - gwas_prs: weighted polygenic contribution from common variants
   (normalised by sqrt(variant_count) for cross-disease comparability)
 - regulatory: weak evidence from regulatory regions
+
+ClinGen validity adjustment: Mendelian gene weights are modulated by
+clingen_validity (Definitive ×1.0, Strong ×0.85, Moderate ×0.70,
+Limited ×0.50, Disputed/Refuted ×0.20, missing ×0.65).
+
+Key domain bonus: variants in genes with known key_domains receive a
+×1.15 contribution multiplier when the variant is a coding change
+(missense/inframe), reflecting increased likelihood of functional impact.
 """
 
 from __future__ import annotations
@@ -65,6 +73,60 @@ def _is_likely_benign_clinvar(v: dict) -> bool:
     return "benign" in sig or "likely_benign" in sig
 
 
+def _clingen_weight(clingen_validity: str, is_mendelian: bool) -> float:
+    """Return ClinGen validity weight multiplier for a gene.
+
+    Mendelian genes are expected to have a ClinGen rating.
+    Missing rating on a Mendelian gene is penalized (×0.65).
+    GWAS genes without ratings are not penalized (×1.0).
+    """
+    if not clingen_validity or not clingen_validity.strip():
+        return 0.65 if is_mendelian else 1.0
+    
+    validity = clingen_validity.strip().lower()
+    
+    if "definitive" in validity:
+        return 1.00
+    if "strong" in validity:
+        return 0.85
+    if "moderate" in validity:
+        return 0.70
+    if "limited" in validity:
+        return 0.50
+    if "disputed" in validity or "refuted" in validity:
+        return 0.20
+    
+    # Unknown rating string — treat same as missing
+    return 0.65 if is_mendelian else 1.0
+
+
+def _is_coding_variant(v: dict) -> bool:
+    """Check if variant is a coding change (missense, inframe, stop, etc.)."""
+    consequence = (v.get("consequence") or v.get("CSQ") or "").lower()
+    coding_terms = [
+        "missense", "inframe", "stop_gained", "stop_lost",
+        "start_lost", "frameshift", "synonymous", "coding",
+        "nonsynonymous", "non_synonymous", "amino_acid",
+    ]
+    return any(term in consequence for term in coding_terms)
+
+
+def _domain_bonus(gene: str, profile: DiseaseProfile, v: dict) -> float:
+    """Return domain-hit bonus multiplier for a variant.
+
+    If the gene has key_domains annotation and the variant is a coding
+    change (missense/inframe), apply a 1.15× multiplier reflecting
+    increased likelihood of hitting a critical domain.
+    """
+    gene_map = {g.gene: g for g in profile.gene_set}
+    gw = gene_map.get(gene)
+    if not gw or not gw.key_domains:
+        return 1.0
+    if _is_coding_variant(v):
+        return 1.15
+    return 1.0
+
+
 @dataclass
 class ContributionResult:
     mendelian_high: list[dict] = field(default_factory=list)
@@ -106,19 +168,31 @@ def _score_mendelian_high(
 ) -> list[dict]:
     """High-penetrance pathogenic variants in mendelian_high genes."""
     results = []
-    high_genes = {g.gene for g in profile.gene_set if g.tier == "mendelian_high"}
+    gene_map = {g.gene: g for g in profile.gene_set}
     for v in tiered.get("tier1_variants", []):
         gene = _variant_gene(v)
-        if gene not in high_genes:
+        gw = gene_map.get(gene)
+        if not gw or gw.tier != "mendelian_high":
             continue
         if _is_likely_benign_clinvar(v):
             continue
+        
+        clingen_mult = _clingen_weight(gw.clingen_validity, True)
+        domain_mult = _domain_bonus(gene, profile, v)
+        contribution = 1.0 * clingen_mult * domain_mult
+        
+        note_parts = ["High-penetrance variant in mendelian gene"]
+        if clingen_mult < 1.0:
+            note_parts.append(f"clingen_validity={gw.clingen_validity or 'missing'} (×{clingen_mult})")
+        if domain_mult > 1.0:
+            note_parts.append("coding change in gene with key domains (×1.15)")
+        
         results.append({
             "gene": gene,
             "variant": _variant_key(v),
             "tier": 1,
-            "contribution": 1.0,
-            "note": "High-penetrance variant in mendelian gene",
+            "contribution": round(min(contribution, 1.0), 3),
+            "note": "; ".join(note_parts),
             "raw": v,
         })
     return results
@@ -138,12 +212,12 @@ def _score_mendelian_mod(
 ) -> list[dict]:
     """Moderate-penetrance variants in mendelian_mod or mendelian_high genes."""
     results = []
-    mod_genes = {g.gene for g in profile.gene_set if g.tier in ("mendelian_mod", "mendelian_high")}
     gene_map = {g.gene: g for g in profile.gene_set}
     for tier_key in ("tier1_variants", "tier2_variants", "tier3_variants"):
         for v in tiered.get(tier_key, []):
             gene = _variant_gene(v)
-            if gene not in mod_genes:
+            gw = gene_map.get(gene)
+            if not gw or gw.tier not in ("mendelian_mod", "mendelian_high"):
                 continue
             if _is_likely_benign_clinvar(v):
                 continue
@@ -155,7 +229,6 @@ def _score_mendelian_mod(
                     continue
                 if not _is_damaging_or_pathogenic(v):
                     continue
-            gw = gene_map[gene]
             af = _gnomad_af(v)
             rarity_bonus = 1.0 if af is None else max(0.5, 1.0 - af)
             contribution = gw.contribution_score * gw.penetrance_score * rarity_bonus
@@ -166,12 +239,24 @@ def _score_mendelian_mod(
             gt = (v.get("gt") or "./.").replace("|", "/")
             zygosity_factor = 1.5 if gt in ("1/1", "1|1") else 1.0
             contribution *= zygosity_factor
+            
+            # ClinGen validity and domain bonus
+            clingen_mult = _clingen_weight(gw.clingen_validity, True)
+            domain_mult = _domain_bonus(gene, profile, v)
+            contribution *= clingen_mult * domain_mult
+            
+            note_parts = [f"{gw.penetrance} penetrance variant in {gene}"]
+            if clingen_mult < 1.0:
+                note_parts.append(f"clingen_validity={gw.clingen_validity or 'missing'} (×{clingen_mult})")
+            if domain_mult > 1.0:
+                note_parts.append("coding change in gene with key domains (×1.15)")
+            
             results.append({
                 "gene": gene,
                 "variant": _variant_key(v),
                 "tier": tier,
                 "contribution": round(min(contribution, 1.0), 3),
-                "note": f"{gw.penetrance} penetrance variant in {gene}",
+                "note": "; ".join(note_parts),
                 "raw": v,
             })
     return results
@@ -243,6 +328,12 @@ def _score_known_pathogenic(
                 zygosity_factor = 0.1  # heterozygous carrier → negligible
 
         contribution = v.contribution_score * zygosity_factor
+
+        # ClinGen validity adjustment for Mendelian genes
+        gene_w = gene_map.get(v.gene)
+        if gene_w and gene_w.is_mendelian:
+            clingen_mult = _clingen_weight(gene_w.clingen_validity, True)
+            contribution *= clingen_mult
 
         results.append({
             "rsid": v.rsid or v.vcf_key,

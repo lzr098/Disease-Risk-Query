@@ -323,6 +323,9 @@ class DiseaseReference:
         gene_contribution_map = {g["gene"]: g.get("contribution_score", 0.0) for g in gene_set}
         gene_penetrance_map = {g["gene"]: g.get("penetrance", "") for g in gene_set}
         gene_tier_map = {g["gene"]: g.get("tier", "gwas") for g in gene_set}
+        gene_phenotype_map = {g["gene"]: g.get("phenotype_assoc", "") for g in gene_set if g.get("phenotype_assoc")}
+        gene_domain_map = {g["gene"]: g.get("key_domains", "") for g in gene_set if g.get("key_domains")}
+        gene_clingen_map = {g["gene"]: g.get("clingen_validity", "") for g in gene_set if g.get("clingen_validity")}
         snp_contribution_map = {s["rsid"]: s.get("contribution_score", 0.0) for s in structured.get("gwas_lead_snps", [])}
 
         literature = []
@@ -344,6 +347,9 @@ class DiseaseReference:
             "gene_contribution_map": gene_contribution_map,
             "gene_penetrance_map": gene_penetrance_map,
             "gene_tier_map": gene_tier_map,
+            "gene_phenotype_map": gene_phenotype_map,
+            "gene_domain_map": gene_domain_map,
+            "gene_clingen_map": gene_clingen_map,
             "snp_contribution_map": snp_contribution_map,
         }
 

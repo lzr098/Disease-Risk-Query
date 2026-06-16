@@ -28,13 +28,27 @@ class GeneWeight:
     penetrance_score: float
     evidence: str  # familial | rare_variant | gwas | mixed | common_risk
     note: str = ""
+    phenotype_assoc: str = ""  # Gene-disease phenotype association from MyGene/OMIM
+    key_domains: str = ""  # Key protein domains from MyGene InterPro / UniProt
+    clingen_validity: str = ""  # ClinGen validity: Definitive / Strong / Moderate / Limited / Disputed / Refuted
+    is_mendelian: bool = False  # True if tier is mendelian_high or mendelian_mod
+
+    def __post_init__(self):
+        # Auto-derive is_mendelian from tier
+        if self.tier in ("mendelian_high", "mendelian_mod"):
+            object.__setattr__(self, "is_mendelian", True)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "GeneWeight":
-        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+        filtered = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
+        # Auto-derive is_mendelian from tier if not explicitly set
+        if "is_mendelian" not in filtered or not filtered["is_mendelian"]:
+            tier = filtered.get("tier", "")
+            filtered["is_mendelian"] = tier in ("mendelian_high", "mendelian_mod")
+        return cls(**filtered)
 
 
 @dataclass(frozen=True)
@@ -200,6 +214,21 @@ class DiseaseProfile:
     @property
     def gene_tier_map(self) -> dict[str, str]:
         return {g.gene: g.tier for g in self.gene_set}
+
+    @property
+    def gene_phenotype_map(self) -> dict[str, str]:
+        """Gene → phenotype_assoc description."""
+        return {g.gene: g.phenotype_assoc for g in self.gene_set if g.phenotype_assoc}
+
+    @property
+    def gene_domain_map(self) -> dict[str, str]:
+        """Gene → key_domains annotations."""
+        return {g.gene: g.key_domains for g in self.gene_set if g.key_domains}
+
+    @property
+    def gene_clingen_map(self) -> dict[str, str]:
+        """Gene → clingen_validity rating."""
+        return {g.gene: g.clingen_validity for g in self.gene_set if g.clingen_validity}
 
     @property
     def snp_contribution_map(self) -> dict[str, float]:
