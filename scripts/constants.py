@@ -9373,6 +9373,22 @@ DISEASE_NAME_ALIASES: dict[str, str] = {
     "niddm": "type 2 diabetes",
     "二型糖尿病": "type 2 diabetes",
     "2型糖尿病": "type 2 diabetes",
+    # Breast cancer
+    "乳腺癌": "breast_cancer",
+    "乳癌": "breast_cancer",
+    "乳腺癌症": "breast_cancer",
+    "breast cancer": "breast_cancer",
+    "brca": "breast_cancer",
+    # Colorectal cancer
+    "结直肠癌": "colorectal_cancer",
+    "结直肠癌症": "colorectal_cancer",
+    "大肠癌": "colorectal_cancer",
+    "结肠癌": "colorectal_cancer",
+    "直肠癌": "colorectal_cancer",
+    "colorectal cancer": "colorectal_cancer",
+    "crc": "colorectal_cancer",
+    "colon cancer": "colorectal_cancer",
+    "rectal cancer": "colorectal_cancer",
 }
 
 
