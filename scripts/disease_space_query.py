@@ -226,15 +226,39 @@ def _match_record(
 
 
 def _infer_ref_ref(variant: VariantWeight) -> KnownVariantGenotype:
-    """Return a REF/REF genotype for a variant absent from the VCF."""
+    """Return a REF/REF genotype for a variant absent from the VCF.
+
+    Dosage is computed from the VariantWeight structure:
+    - REF = variant.ref (typically other_allele / non-effect allele)
+    - ALT = variant.alt (typically effect_allele)
+    - GT 0/0 = homozygous REF
+
+    If effect_allele == REF, then 0/0 = 2 copies of the effect allele → dosage=2.
+    If effect_allele == ALT, then 0/0 = 0 copies → dosage=0.
+    If effect_allele matches neither, dosage=0 (unrecognised allele).
+    """
+    ref_allele = _normalize_allele(variant.ref)
+    alt_allele = _normalize_allele(variant.alt)
+    effect = (variant.effect_allele or "").upper()
+
+    # Compute dosage: count of effect_allele in a 0/0 genotype
+    if effect and effect == ref_allele:
+        # Effect allele is the REF → 0/0 = homozygous for effect → 2 copies
+        dosage = 2
+    elif effect and effect == alt_allele:
+        # Effect allele is the ALT → 0/0 = no ALT copies → 0 copies
+        dosage = 0
+    else:
+        dosage = 0
+
     return KnownVariantGenotype(
         variant=variant,
         chrom=variant.chrom,
         pos=variant.pos,
-        ref=_normalize_allele(variant.ref),
-        alt=_normalize_allele(variant.alt),
+        ref=ref_allele,
+        alt=alt_allele,
         gt="0/0",
-        dosage=0,
+        dosage=dosage,
         inferred_ref_ref=True,
         filter_status=".",
         sample_format="GT",

@@ -411,10 +411,18 @@ def _score_gwas_prs(
         weight = v.contribution_score
         contribution = effective_beta * kg.dosage * weight
         total += contribution
+        # VCF coordinates (may differ from template when REF/ALT are swapped)
+        vcf_ref = kg.ref
+        vcf_alt = kg.alt
+        vcf_variant = f"{kg.chrom}:{kg.pos}:{vcf_ref}:{vcf_alt}"
+        template_swap = (vcf_ref != v.ref or vcf_alt != v.alt) and not kg.inferred_ref_ref
+
         details.append({
             "rsid": v.rsid,
             "gene": v.gene,
-            "variant": v.vcf_key,
+            "variant": vcf_variant,  # use VCF coordinates for accurate display
+            "template_variant": v.vcf_key if template_swap else None,
+            "template_swap": template_swap,
             "gt": kg.gt,
             "effect_allele": v.effect_allele,
             "dosage": kg.dosage,

@@ -114,8 +114,20 @@ def _known_variant_table_row(d: dict) -> str:
     contrib = d.get("contribution")
     contrib_str = f"{contrib:.3f}" if isinstance(contrib, (int, float)) else "-"
     note = d.get("note", "")
+
+    # When VCF REF/ALT are swapped relative to the disease template,
+    # annotate the variant cell with a marker so the reader knows the
+    # genotype (GT) is interpreted in VCF coordinates, which differ from
+    # the template expectation.
+    if d.get("template_swap", False):
+        variant_display = f"{variant} †"
+        if not note:
+            note = "VCF REF/ALT 与模板预期交换"
+    else:
+        variant_display = variant
+
     return (
-        f"| {rsid} | {gene} | `{variant}` | {gt} | {status} | {risk_allele} | "
+        f"| {rsid} | {gene} | `{variant_display}` | {gt} | {status} | {risk_allele} | "
         f"{dosage} | {or_str} | {beta_str} | {contrib_str} | {note} |"
     )
 
@@ -520,6 +532,12 @@ def generate_report(
             )
         else:
             lines.extend(_render_layer_table(layer, items, gene_context))
+            # Add legend if any GWAS/PRS variant has template/VCF coordinate swap
+            if layer == "gwas_prs" and raw_items:
+                has_swap = any(d.get("template_swap") for d in raw_items)
+                if has_swap:
+                    lines.append("_† VCF REF/ALT 与疾病模板预期方向交换，基因型按 VCF 坐标解读。_")
+                    lines.append("")
             # For known_pathogenic, add gene function context below table
             if layer == "known_pathogenic" and items:
                 shown_genes = {k.get("gene", "") for k in items if k.get("gene")}
