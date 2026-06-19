@@ -199,7 +199,10 @@ def _match_record(
     elif variant.effect_allele and variant.effect_allele.upper() in alts:
         matched_alt = variant.effect_allele.upper()
     elif variant.effect_allele and variant.effect_allele.upper() == ref:
-        matched_alt = ref  # effect allele is REF
+        # Effect allele matches VCF REF — this is a REF/ALT swap relative
+        # to the template.  Use the actual VCF ALT (the template's non-effect
+        # allele) as matched_alt so the variant key is meaningful.
+        matched_alt = alts[0] if alts else ref
     elif alts:
         matched_alt = alts[0]
     else:

@@ -17,7 +17,7 @@
 - Annotates with Ensembl VEP (SIFT, PolyPhen, CADD, SpliceAI, REVEL, gnomAD AF)
 - Classifies variants into **Tier 1** (high risk) / **Tier 2** (moderate) / **Tier 3** (low)
 - Enriches with ClinVar P/LP, OMIM phenotypes, GWAS lead SNPs, key literature
-- Supports **pre-built disease templates** for 10+ common diseases
+- Supports **pre-built disease templates** for 12 common diseases
 - Dynamic gene set construction for unmatched diseases
 - China-population reference (CHN_AF from local VCF)
 
@@ -28,7 +28,7 @@
 - VEP 功能注释 (SIFT, PolyPhen, CADD, SpliceAI, REVEL, gnomAD 频率)
 - **Tier 1** (高风险) / **Tier 2** (中风险) / **Tier 3** (低风险) 三级分层
 - ClinVar 致病/可能致病变异 + OMIM 表型 + GWAS lead SNP + 关键文献佐证
-- 支持 **10+ 内置疾病模板** (阿尔茨海默病、帕金森、心梗、2型糖尿病、乳腺癌、结直肠癌等)
+- 支持 **12 个内置疾病模板** (阿尔茨海默病、帕金森、心梗、2型糖尿病、乳腺癌、结直肠癌、IBD、骨质疏松、FH、MDS 等)
 - 未匹配疾病**动态基因集构建**
 - 中国人群频率参考 (CHN_AF)
 
@@ -68,6 +68,7 @@ python scripts/run_P010.py \
 | IBD · 炎症性肠病 | complex | 29 | 46 | 3 |
 | Osteoporosis · 骨质疏松 | complex | 32 | 49 | 5 |
 | Familial hypercholesterolemia · 家族性高胆固醇血症 | mendelian | 32 | 18 | 38 |
+| **Myelodysplastic syndromes · 骨髓增生异常综合征** | **mixed** | **24** | **6** | **3** |
 
 ---
 
