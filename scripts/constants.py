@@ -9325,6 +9325,7 @@ COMPLEX_DISEASE_KEYWORDS = [
     "vision", "macular", "age-related macular degeneration", "amd",
     "glaucoma", "optic nerve", "intraocular pressure",
     "myopia", "refractive error", "high myopia", "cataract", "retinopathy",
+    "myelodysplastic", "mds", "bone marrow failure",
 ]
 
 
@@ -9389,6 +9390,33 @@ DISEASE_NAME_ALIASES: dict[str, str] = {
     "crc": "colorectal_cancer",
     "colon cancer": "colorectal_cancer",
     "rectal cancer": "colorectal_cancer",
+    # Osteoporosis
+    "骨质疏松": "osteoporosis",
+    "骨质疏松症": "osteoporosis",
+    "osteoporosis": "osteoporosis",
+    # IBD
+    "炎症性肠病": "ibd",
+    "炎性肠病": "ibd",
+    "克罗恩病": "ibd",
+    "克罗恩": "ibd",
+    "溃疡性结肠炎": "ibd",
+    "uc": "ibd",
+    "inflammatory bowel disease": "ibd",
+    "ibd": "ibd",
+    "crohn's disease": "ibd",
+    "crohn's": "ibd",
+    "crohns": "ibd",
+    "ulcerative colitis": "ibd",
+    # MDS / Myelodysplastic Syndromes
+    "骨髓增生异常综合征": "myelodysplastic syndromes",
+    "骨髓增生异常综合症": "myelodysplastic syndromes",
+    "骨髓增生异常": "myelodysplastic syndromes",
+    "myelodysplastic syndromes": "myelodysplastic syndromes",
+    "myelodysplastic syndrome": "myelodysplastic syndromes",
+    "mds": "myelodysplastic syndromes",
+    "myelodysplasia": "myelodysplastic syndromes",
+    "白血病前期": "myelodysplastic syndromes",
+    "preleukemia": "myelodysplastic syndromes",
 }
 
 
