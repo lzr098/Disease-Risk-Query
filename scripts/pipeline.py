@@ -147,21 +147,42 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         logger.info("Liftover result: %s", lo_result)
         build = "GRCh38"
     else:
-        shutil.copy2(config.input_vcf, normalized_vcf)
+        # Use symlink instead of full copy — the normalized VCF is read-only downstream
+        if normalized_vcf.exists() or normalized_vcf.is_symlink():
+            normalized_vcf.unlink(missing_ok=True)
+        normalized_vcf.symlink_to(config.input_vcf.resolve())
         idx = config.input_vcf.with_suffix(config.input_vcf.suffix + ".csi")
         if idx.exists():
-            shutil.copy2(idx, normalized_vcf.with_suffix(normalized_vcf.suffix + ".csi"))
+            dest_idx = normalized_vcf.with_suffix(normalized_vcf.suffix + ".csi")
+            if dest_idx.exists() or dest_idx.is_symlink():
+                dest_idx.unlink(missing_ok=True)
+            dest_idx.symlink_to(idx.resolve())
 
-    # REF validation
+    # REF validation — with sub-checkpoint (skip if VCF unchanged from last validation)
     if GRCH38_FASTA.exists() and build == "GRCh38":
         logger.info("Step 1b: Validating REF alleles against GRCh38 FASTA")
-        validation = validate_ref_alleles(normalized_vcf, GRCH38_FASTA)
-        logger.info("REF validation: %s", validation)
-        if not validation["pass"]:
-            raise RuntimeError(
-                f"REF validation failed: mismatch rate {validation['mismatch_rate']:.1%}. "
-                "Check input VCF integrity or genome build."
-            )
+        ref_marker = normalized_vcf.parent / ".ref_validation_marker"
+        try:
+            st = normalized_vcf.stat()
+            if ref_marker.exists():
+                parts = ref_marker.read_text().strip().split()
+                if len(parts) >= 2 and int(parts[0]) == st.st_mtime and int(parts[1]) == st.st_size:
+                    logger.info("REF validation checkpoint hit — skipping (VCF unchanged)")
+                    validation = {"pass": True, "note": "cached, VCF unchanged"}
+                else:
+                    raise ValueError("stale marker")
+            else:
+                raise ValueError("no marker")
+        except (ValueError, OSError):
+            validation = validate_ref_alleles(normalized_vcf, GRCH38_FASTA)
+            logger.info("REF validation: %s", validation)
+            if not validation["pass"]:
+                raise RuntimeError(
+                    f"REF validation failed: mismatch rate {validation['mismatch_rate']:.1%}. "
+                    "Check input VCF integrity or genome build."
+                )
+            st = normalized_vcf.stat()
+            ref_marker.write_text(f"{st.st_mtime} {st.st_size}")
     else:
         validation = {"pass": True, "note": "FASTA not available or build not GRCh38"}
 

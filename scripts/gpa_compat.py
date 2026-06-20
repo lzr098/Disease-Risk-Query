@@ -23,9 +23,11 @@ with the locally installed ``ensemblorg/ensembl-vep:latest`` image.
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -34,6 +36,129 @@ from constants import GRCH38_FASTA, VEP_CACHE, VEP_IMAGE
 logger = logging.getLogger(__name__)
 
 _PATCHED = False
+_VEP_FORKS = int(os.environ.get("DRQ_VEP_FORKS", "0"))
+
+
+def _cpu_load_1m() -> float:
+    """Return the 1-minute system load average. macOS/Linux compatible."""
+    try:
+        return os.getloadavg()[0]
+    except Exception:
+        return 99.0  # assume busy
+
+
+def _cpu_idle_for_parallel() -> bool:
+    """Return True if the system has idle capacity for parallel VEP forks.
+
+    Heuristic: if the 1-minute load average is below 1.0 per available core
+    (meaning < 100% CPU utilisation), parallelise with N-1 forks.
+    """
+    cores = os.cpu_count() or 1
+    if cores < 2:
+        return False
+    load = _cpu_load_1m()
+    # idle if total load < 1.0 per core (e.g. < 8 on 8-core machine)
+    idle = load < float(cores) * 0.8  # 80% threshold
+    logger.info("CPU check: 1m load %.2f, cores=%d, idle=%s", load, cores, idle)
+    return idle
+
+
+def _run_vep_single(part_vcf: Path, part_out: Path,
+                    vep_args: List[str], volumes: List[str]) -> Path:
+    """Run VEP Docker on a single VCF partition. Returns the output path."""
+    cmd = ["docker", "run", "--rm", *volumes, VEP_IMAGE, *vep_args,
+           "--input_file", f"/data/part/{part_vcf.name}",
+           "--output_file", f"/data/part_out/{part_out.name}"]
+    logger.debug("VEP partition: docker run --rm %s → %s", part_vcf.name, part_out.name)
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(f"VEP partition {part_vcf.name} failed: {proc.stderr[:500]}")
+    return part_out
+
+
+def _run_vep_parallel(partitions: List[Path], part_outputs: List[Path],
+                      vep_args: List[str], volumes: List[str],
+                      max_workers: int = 4) -> List[Path]:
+    """Run VEP Docker in parallel across VCF partitions."""
+    results: List[Path] = [None] * len(partitions)
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {}
+        for i, (pv, po) in enumerate(zip(partitions, part_outputs)):
+            futures[pool.submit(_run_vep_single, pv, po, vep_args, volumes)] = i
+        for future in as_completed(futures):
+            i = futures[future]
+            try:
+                results[i] = future.result()
+            except Exception as exc:
+                logger.error("VEP partition %d failed: %s", i, exc)
+                raise
+    return results
+
+
+def _split_vcf_for_parallel(vcf_path: Path, work_dir: Path, forks: int = 4) -> List[Path]:
+    """Split a VCF into `forks` roughly equal partitions by chromosome.
+
+    Tries ``bcftools index --stats`` first, then falls back to standard chromosomes.
+    """
+    import subprocess
+    chroms: List[str] = []
+    # Try to get chromosome list from index stats
+    try:
+        proc = subprocess.run(
+            ["bcftools", "index", "--stats", str(vcf_path)],
+            capture_output=True, text=True, check=False,
+        )
+        for line in proc.stdout.strip().split("\n"):
+            if line.startswith("#") or not line.strip():
+                continue
+            chrom = line.split("\t")[0].strip()
+            if chrom:
+                chroms.append(chrom)
+    except Exception:
+        pass
+
+    if not chroms:
+        # Fallback: parse VCF header for contigs
+        try:
+            proc = subprocess.run(
+                ["bcftools", "view", "-h", str(vcf_path)],
+                capture_output=True, text=True, check=False,
+            )
+            for line in proc.stdout.strip().split("\n"):
+                if line.startswith("##contig=<ID="):
+                    import re
+                    m = re.search(r"ID=([^,>]+)", line)
+                    if m:
+                        chroms.append(m.group(1))
+        except Exception:
+            pass
+
+    if not chroms:
+        chroms = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY", "chrM"]
+
+    # Group chromosomes into forks partitions
+    parts: List[List[str]] = [[] for _ in range(forks)]
+    for i, c in enumerate(chroms):
+        parts[i % forks].append(c)
+
+    part_paths: List[Path] = []
+    for i, chrom_group in enumerate(parts):
+        if not chrom_group:
+            continue
+        part_path = work_dir / f"vep_part_{i}.vcf.gz"
+        chrom_pattern = ",".join(chrom_group)
+        subprocess.run(
+            ["bcftools", "view", "-r", chrom_pattern, "-Oz", "-o", str(part_path), str(vcf_path)],
+            capture_output=True, check=True,
+        )
+        subprocess.run(
+            ["bcftools", "index", "-t", str(part_path)],
+            capture_output=True, check=True,
+        )
+        part_paths.append(part_path)
+        logger.info("VCF partition %d: %d chromosomes → %s", i, len(chrom_group), part_path.name)
+
+    return part_paths
 
 
 def patch_gpa_csq_parser() -> None:
@@ -179,59 +304,72 @@ def pre_annotate_with_vep(
     try:
         out_uncompressed = tmp_dir / "annotated.vcf"
 
-        volumes = [
-            "-v", f"{input_vcf.parent}:/data/input:ro",
-            "-v", f"{tmp_dir}:/data/output",
-        ]
-        vep_args = [
-            "vep",
-            "--input_file", f"/data/input/{input_vcf.name}",
-            "--output_file", f"/data/output/{out_uncompressed.name}",
-            "--vcf",
-            "--assembly", assembly,
-            "--canonical",
-            "--mane",
-            "--domains",
-            "--protein",
-            "--hgvs",
-            "--numbers",
-            "--check_existing",
-            "--pubmed",
-            "--symbol",
-            "--biotype",
+        # Build core VEP flags (shared between single and parallel paths)
+        core_flags = [
+            "--vcf", "--assembly", assembly,
+            "--canonical", "--mane", "--domains", "--protein", "--hgvs",
+            "--numbers", "--check_existing", "--pubmed", "--symbol", "--biotype",
         ]
 
         if cache_available:
-            volumes.extend(["-v", f"{cache_dir}:/data/cache:ro"])
-            vep_args.extend([
-                "--cache",
-                "--dir_cache", "/data/cache",
-                "--offline",
-                # VEP 115 gnomAD AF flags
-                "--af_gnomade",
-                "--af_gnomadg",
-            ])
-            logger.info("Running VEP 115 in offline/cache mode with gnomAD exome/genome AF")
+            core_flags.extend(["--cache", "--dir_cache", "/data/cache", "--offline"])
+            core_flags.extend(["--af_gnomade", "--af_gnomadg"])
         else:
-            logger.warning(
-                "VEP cache not found at %s; falling back to --database mode "
-                "(gnomAD AF will be unavailable).", cache_dir
-            )
-            vep_args.append("--database")
-            # Mount GRCh38 FASTA for database mode if available
+            core_flags.append("--database")
             if GRCH38_FASTA.exists():
+                core_flags.extend(["--fasta", f"/data/fasta/{GRCH38_FASTA.name}"])
+
+        if use_parallel:
+            logger.info("CPU idle — running VEP with %d parallel forks", forks)
+            part_dir = Path(tempfile.mkdtemp(prefix="drq_vep_parts_"))
+            try:
+                part_vcfs = _split_vcf_for_parallel(input_vcf, part_dir, forks)
+                part_outputs = [part_dir / f"vep_out_{i}.vcf" for i in range(len(part_vcfs))]
+
+                volumes_base = [
+                    "-v", f"{cache_dir}:/data/cache:ro",
+                    "-v", f"{part_dir}:/data/part:ro",
+                    "-v", f"{part_dir}:/data/part_out",
+                ]
+                if not cache_available and GRCH38_FASTA.exists():
+                    volumes_base.extend(["-v", f"{GRCH38_FASTA.parent}:/data/fasta:ro"])
+
+                _run_vep_parallel(part_vcfs, part_outputs, core_flags, volumes_base, max_workers=forks)
+
+                # Concatenate partition outputs (skip headers except first)
+                with open(out_uncompressed, "w") as out_f:
+                    for j, po in enumerate(part_outputs):
+                        with open(po) as in_f:
+                            for line in in_f:
+                                if line.startswith("#"):
+                                    if j == 0:
+                                        out_f.write(line)
+                                else:
+                                    out_f.write(line)
+                logger.info("Merged %d VEP partition outputs → %s", len(part_outputs), out_uncompressed)
+            finally:
+                shutil.rmtree(part_dir, ignore_errors=True)
+        else:
+            # Single-threaded VEP
+            volumes = [
+                "-v", f"{input_vcf.parent}:/data/input:ro",
+                "-v", f"{tmp_dir}:/data/output",
+            ]
+            if cache_available:
+                volumes.extend(["-v", f"{cache_dir}:/data/cache:ro"])
+            elif not cache_available and GRCH38_FASTA.exists():
                 volumes.extend(["-v", f"{GRCH38_FASTA.parent}:/data/fasta:ro"])
-                vep_args.extend([
-                    "--fasta", f"/data/fasta/{GRCH38_FASTA.name}",
-                ])
 
-        cmd = ["docker", "run", "--rm", *volumes, VEP_IMAGE, *vep_args]
-        logger.info("VEP 115 command: docker run --rm ... (%d variants)",
-                    _count_vcf_records(input_vcf))
+            cmd = ["docker", "run", "--rm", *volumes, VEP_IMAGE,
+                   "vep",
+                   "--input_file", f"/data/input/{input_vcf.name}",
+                   "--output_file", f"/data/output/{out_uncompressed.name}",
+                   *core_flags]
+            logger.info("VEP 115: docker run --rm ... (%d variants)", _count_vcf_records(input_vcf))
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            if proc.returncode != 0:
+                raise RuntimeError(f"VEP 115 Docker failed: {proc.stderr[:1000]}")
 
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        if proc.returncode != 0:
-            raise RuntimeError(f"VEP 115 Docker failed: {proc.stderr[:1000]}")
 
         if not out_uncompressed.exists() or out_uncompressed.stat().st_size == 0:
             raise RuntimeError("VEP 115 produced no output file")

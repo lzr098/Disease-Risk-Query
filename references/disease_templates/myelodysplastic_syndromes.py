@@ -556,4 +556,28 @@ TEMPLATE = {
             'note': 'Jaiswal et al. 2025 Nat Genet; 最大CHIP GWAS; 新胚系位点→CH克隆扩增→MDS/AML风险; TET2/DNMT3A/ASXL1/TCL1A',
         },
     ],
+    'key_regions': {
+        'GATA2': {
+            'note': 'ZF1(aa295-318) + ZF2(aa348-374): C4型锌指; LOF→造血衰竭',
+            'regions': [(295, 374)],
+        },
+        'DDX41': {
+            'note': 'DEAD-box解旋酶域(aa151-350); R525体细胞热点',
+            'regions': [(151, 350), (520, 530)],
+        },
+        'RUNX1': {
+            'note': 'Runt同源域(aa50-177): DBD+CBFβ二聚化; TAD(aa290-370)',
+            'regions': [(50, 177), (290, 370)],
+        },
+        'CEBPA': {
+            'note': 'TAD1(aa1-70); bZIP(aa278-358): DBD+二聚化',
+            'regions': [(1, 70), (278, 358)],
+        },
+        'ETV6': {'note': 'PNT/HLH(aa38-124); ETS DBD(aa334-414)', 'regions': [(38, 124), (334, 414)]},
+        'ERG': {'note': 'PNT/pontin(aa120-200); ETS DBD(aa290-370)', 'regions': [(120, 200), (290, 370)]},
+        'TP53': {'note': 'DBD(aa102-292): 突变热点; 四聚化(aa323-356)', 'regions': [(102, 292), (323, 356)]},
+        'TERT': {'note': 'RT域(aa600-950): 端粒酶核心', 'regions': [(600, 950)]},
+        'SBDS': {'note': 'D1-D3域(aa1-250): 60S核糖体组装', 'regions': [(1, 250)]},
+        'FANCA': {'note': 'FA核心复合体结合域(aa1-700)', 'regions': [(1, 700)]},
+    },
 }

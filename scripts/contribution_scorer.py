@@ -73,6 +73,115 @@ def _is_likely_benign_clinvar(v: dict) -> bool:
     return "benign" in sig or "likely_benign" in sig
 
 
+def _is_vus_clinvar(v: dict) -> bool:
+    """Return True if ClinVar classification is VUS (uncertain significance)."""
+    sig = (v.get("clinvar_sig") or "").lower()
+    if "uncertain" in sig:
+        return True
+    # Conflicting classifications without a clear lean
+    if "conflicting" in sig:
+        # conflicting + benign/likely_benign → treat as VUS-equivalent
+        return True
+    return False
+
+
+def _clinvar_vus_factor(v: dict) -> float:
+    """Return contribution multiplier for ClinVar VUS.
+    
+    VUS = 0.5 (uncertain), Conflicting-VUS = 0.7 (some submissions disagree),
+    Conflicting with benign lean = 0.4 (some evidence against pathogenicity).
+    Non-VUS = 1.0 (no penalty).
+    """
+    if not _is_vus_clinvar(v):
+        return 1.0
+    sig = (v.get("clinvar_sig") or "").lower()
+    # Conflicting WITH benign in the mix → lean toward reduced weight
+    if "conflicting" in sig:
+        if "benign" in sig and "pathogenic" not in sig.replace("conflicting_classifications_of_pathogenicity", "").replace("conflicting_interpretations_of_pathogenicity", ""):
+            return 0.4
+        return 0.7
+    # Standard VUS
+    return 0.5
+
+
+def _protein_context_factor(v: dict) -> tuple[float, str]:
+    """Assess protein structural context from GPA domain_info and VEP/UniProt.
+
+    Returns (multiplier, reason_string).
+    
+    Uses GPA's 'domain_info' field (pre-computed by GPA core) which provides
+    structured domain annotations including:
+    - 'domain': domain name (e.g., 'MutS_V', 'Disordered', 'Kinase')
+    - 'domain_range': residue range
+    - 'function': domain function category
+    
+    Also checks VEP DOMAINS and UniProt features when available.
+    
+    Disordered region + no PTM → ×0.5
+    Disordered region + phosphosite → ×0.7
+    No known domain ("inter-domain") → ×0.8
+    Otherwise → ×1.0
+    """
+    # Check GPA's domain_info first (most reliable source)
+    domain_info = v.get("domain_info")
+    if isinstance(domain_info, dict):
+        domain = (domain_info.get("domain") or "").lower()
+        function_type = (domain_info.get("function") or "").lower()
+        
+        if "disordered" in domain or "disordered" in function_type:
+            # Check if this is also a known modification site
+            note = domain_info.get("note", "").lower()
+            if any(kw in note for kw in ["phospho", "modification", "acetyl"]):
+                return 0.7, f"disordered region with modification site (×0.7): {domain_info.get('domain_range','?')}"
+            return 0.5, f"disordered region (×0.5): {domain_info.get('domain_range','?')}"
+        
+        if "inter-domain" in domain or "unannotated" in domain:
+            return 0.8, "inter-domain/unannotated position (×0.8)"
+    
+    # Fallback to VEP/UniProt features
+    domains_raw = v.get("domains")
+    uniprot_features = v.get("uniprot_features")
+    
+    if not domains_raw and not uniprot_features:
+        return 1.0, ""
+    
+    # Extract protein position from HGVSp
+    hgvsp = v.get("hgvsp") or v.get("HGVSp") or ""
+    import re
+    pos_match = re.search(r"p?\.[A-Za-z*]+\d+", hgvsp)
+    if not pos_match:
+        return 1.0, ""
+    digits = re.search(r"(\d+)", pos_match.group(0))
+    if not digits:
+        return 1.0, ""
+    protein_position = int(digits.group(1))
+    
+    # VEP DOMAINS: parse into feature list
+    vep_features = []
+    if isinstance(domains_raw, list):
+        for d in domains_raw:
+            if isinstance(d, dict):
+                vep_features.append({
+                    "db": d.get("db", ""),
+                    "name": d.get("name", d.get("desc", "")),
+                    "start": d.get("start", 0),
+                    "end": d.get("end", 0),
+                })
+    
+    # UniProt features
+    uni_features = []
+    if isinstance(uniprot_features, list):
+        uni_features = uniprot_features
+    
+    # Use domain_dive assessor
+    from variant_domain_dive import assess_protein_context
+    ctx = assess_protein_context(protein_position, vep_features, uni_features)
+    
+    if ctx.get("downgrade_factor", 1.0) < 1.0:
+        return ctx["downgrade_factor"], ctx.get("reasoning", "")
+    return 1.0, ""
+
+
 def _clingen_weight(clingen_validity: str, is_mendelian: bool) -> float:
     """Return ClinGen validity weight multiplier for a gene.
 

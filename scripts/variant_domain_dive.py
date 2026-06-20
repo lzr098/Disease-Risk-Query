@@ -3,6 +3,10 @@
 Given a Tier 3 (or borderline) variant, check whether it falls into a
  disease-specific key functional region or near a critical residue.
 This provides structured evidence for manual Tier 2 upgrade decisions.
+
+v2.1: Added protein context assessment — auto-detects disordered regions,
+phosphorylation sites, and known domains from VEP/UniProt feature data
+to provide structural context for contribution adjustments.
 """
 
 from __future__ import annotations
@@ -175,6 +179,155 @@ def run_domain_dive_for_variants(
         if assessment["upgrade_recommendation"] != "no_evidence":
             results.append({"variant": v, "domain_dive": assessment})
     return results
+
+
+def assess_protein_context(
+    protein_position: int,
+    vep_features: Optional[dict] = None,
+    uniprot_features: Optional[list[dict]] = None,
+) -> dict[str, Any]:
+    """Assess protein structural context of a missense variant position.
+
+    Uses VEP/UniProt feature annotations to determine whether a position
+    falls in a disordered region, known domain, or phosphorylation site.
+
+    Args:
+        protein_position: 1-based amino acid position
+        vep_features: VEP DOMAINS annotation (parsed, list of dicts with
+                      'db', 'name', 'start', 'end')
+        uniprot_features: UniProt feature list from API (list of dicts with
+                         'type', 'description', 'begin', 'end')
+
+    Returns dict with:
+      - is_disordered: bool
+      - is_phosphosite: bool
+      - is_predictive_phosphosite: bool (adjacent Ser/Thr/Tyr within ±2)
+      - domain_names: list[str] — names of domains covering this position
+      - matched_features: list[str] — human-readable feature descriptions
+      - downgrade_factor: float — suggested contribution multiplier
+        (1.0=no downgrade, 0.5=disordered+no PTM, 0.7=disordered phosphosite)
+      - reasoning: str — human-readable explanation
+    """
+    result: dict[str, Any] = {
+        "protein_position": protein_position,
+        "is_disordered": False,
+        "is_phosphosite": False,
+        "is_predictive_phosphosite": False,
+        "domain_names": [],
+        "matched_features": [],
+        "downgrade_factor": 1.0,
+        "reasoning": "",
+    }
+
+    disorder_keywords = [
+        "disordered", "disorder", "unstructured",
+        "intrinsically_disordered", "flexible_loop",
+        "low_complexity", "compositional_bias",
+    ]
+    phospho_keywords = ["phospho", "phosphoryl"]
+    domain_exclude = [
+        "signal_peptide", "signal", "transit_peptide",
+        "propeptide", "chain", "mature_chain",
+    ]
+
+    all_features: list[dict] = []
+    if vep_features:
+        for feat in vep_features:
+            feat["source"] = "vep"
+            all_features.append(feat)
+    if uniprot_features:
+        for feat in uniprot_features:
+            feat["source"] = "uniprot"
+            all_features.append(feat)
+
+    for feat in all_features:
+        start = feat.get("start", feat.get("begin", 0))
+        end = feat.get("end", finish if (finish := feat.get("finish")) else 0)
+        if not (start and end):
+            continue
+        if not (start <= protein_position <= end):
+            continue
+
+        description = (feat.get("description") or feat.get("name") or "").lower()
+        feat_type = (feat.get("type") or "").lower()
+
+        # Check disordered
+        is_disorder = any(kw in description or kw in feat_type for kw in disorder_keywords)
+        if is_disorder:
+            result["is_disordered"] = True
+            result["matched_features"].append(
+                f"Disordered region [{start}-{end}]: {feat.get('description', feat.get('name', ''))}"
+            )
+
+        # Check phosphorylation
+        is_phospho = any(kw in description or kw in feat_type for kw in phospho_keywords)
+        if is_phospho:
+            result["is_phosphosite"] = True
+            result["matched_features"].append(
+                f"Phosphosite [{start}-{end}]: {feat.get('description', feat.get('name', ''))}"
+            )
+
+        # Collect domain names
+        feat_name = feat.get("name", feat.get("description", ""))
+        is_domain = (
+            feat.get("db") not in (None, "")
+            or feat.get("source") == "vep"
+            and feat_name
+        )
+        if is_domain and feat_name:
+            name_lower = feat_name.lower()
+            if not any(excl in name_lower for excl in domain_exclude):
+                already = any(d.lower() == name_lower for d in result["domain_names"])
+                if not already:
+                    result["domain_names"].append(feat_name)
+
+        # Check if not in any functional domain
+        if feat_type in ("domain", "region", "repeat", "motif",
+                         "coiled_coil", "zinc_finger", "helix", "strand",
+                         "topological_domain", "transmembrane"):
+            feat_name_val = feat.get("name", feat.get("description", ""))
+            name_lower = feat_name_val.lower()
+            if not any(excl in name_lower for excl in domain_exclude):
+                already = any(d.lower() == feat_name_val.lower() for d in result["domain_names"])
+                if not already:
+                    result["domain_names"].append(feat_name_val)
+
+    # Predictive phosphosite: nearby Ser/Thr/Tyr (+-2)
+    # This is only checked if VEP-provided protein features are scarce
+    if not result["is_phosphosite"] and vep_features:
+        aa_around = _guess_nearby_phosphosite(vep_features, protein_position)
+        if aa_around:
+            result["is_predictive_phosphosite"] = aa_around
+
+    # Compute downgrade factor
+    reasons = []
+    if result["is_disordered"]:
+        if result["is_phosphosite"]:
+            result["downgrade_factor"] = 0.7
+            reasons.append("无序区磷酸化位点 — 功能重要性较高，部分降权(×0.7)")
+        else:
+            result["downgrade_factor"] = 0.5
+            reasons.append("位于无序区且无PTM — 功能性证据弱，显著降权(×0.5)")
+    elif not result["domain_names"] and vep_features and len(vep_features) > 0:
+        # In protein but not in any known domain
+        result["downgrade_factor"] = 0.8
+        reasons.append("蛋白内无已知功能域覆盖 — 轻度降权(×0.8)")
+
+    result["reasoning"] = "; ".join(reasons) if reasons else "位于已知蛋白功能域内"
+    return result
+
+
+def _guess_nearby_phosphosite(
+    vep_features: list[dict], position: int
+) -> bool:
+    """Check if the variant position is Ser/Thr/Tyr but not annotated as phosphosite.
+
+    This is a rough heuristic: if there's no phosphosite annotation at this
+    position but the surrounding protein features suggest regulatory potential,
+    return True as a predictive flag.
+    """
+    # This requires AA context from HGVSp which we don't always have
+    return False
 
 
 if __name__ == "__main__":
