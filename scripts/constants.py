@@ -9417,6 +9417,15 @@ DISEASE_NAME_ALIASES: dict[str, str] = {
     "myelodysplasia": "myelodysplastic syndromes",
     "白血病前期": "myelodysplastic syndromes",
     "preleukemia": "myelodysplastic syndromes",
+    # Prostate Cancer
+    "前列腺癌": "prostate cancer",
+    "前列腺": "prostate cancer",
+    "前列腺肿瘤": "prostate cancer",
+    "前列腺恶性肿瘤": "prostate cancer",
+    "prostate cancer": "prostate cancer",
+    "prostate": "prostate cancer",
+    "pca": "prostate cancer",
+    "prostatic cancer": "prostate cancer",
 }
 
 
