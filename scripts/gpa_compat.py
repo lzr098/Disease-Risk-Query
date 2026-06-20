@@ -66,7 +66,7 @@ def _cpu_idle_for_parallel() -> bool:
 def _run_vep_single(part_vcf: Path, part_out: Path,
                     vep_args: List[str], volumes: List[str]) -> Path:
     """Run VEP Docker on a single VCF partition. Returns the output path."""
-    cmd = ["docker", "run", "--rm", *volumes, VEP_IMAGE, *vep_args,
+    cmd = ["docker", "run", "--rm", *volumes, VEP_IMAGE, "vep", *vep_args,
            "--input_file", f"/data/part/{part_vcf.name}",
            "--output_file", f"/data/part_out/{part_out.name}"]
     logger.debug("VEP partition: docker run --rm %s → %s", part_vcf.name, part_out.name)
