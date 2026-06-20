@@ -319,6 +319,9 @@ def pre_annotate_with_vep(
             if GRCH38_FASTA.exists():
                 core_flags.extend(["--fasta", f"/data/fasta/{GRCH38_FASTA.name}"])
 
+        use_parallel = _cpu_idle_for_parallel()
+        forks = max(2, (os.cpu_count() or 4) - 1)
+
         if use_parallel:
             logger.info("CPU idle — running VEP with %d parallel forks", forks)
             part_dir = Path(tempfile.mkdtemp(prefix="drq_vep_parts_"))
