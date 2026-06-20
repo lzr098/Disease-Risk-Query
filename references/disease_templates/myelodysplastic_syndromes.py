@@ -104,7 +104,7 @@ TEMPLATE = {
             'evidence': 'familial',
             'note': 'ANKRD26相关血小板减少症→MDS/AML(AD); 5\'UTR点突变(通常c.-128至c.-118区域)→ANKRD26表达失调→巨核细胞分化障碍; 中度血小板减少+正常血小板大小; MDS/AML风险~10-30%',
             'phenotype_assoc': 'ANKRD26-RT(AD);5\'UTR突变→血小板减少;MDS/AML~10-30%;巨核细胞发育;正常血小板大小',
-            'key_domains': 'ANK重复域(N端);卷曲螺旋域(C端):信号通路支架;THAP1互作域',
+            'key_domains': 'ANK重复域(N端);卷曲螺旋域(C端):信号通路支架;THAP1互作域;Disordered(区,aa1-41);Disordered(区,aa222-274);Disordered(区,aa504-630);Disordered(区,aa650-698);Disordered(区,aa892-912)',
             'clingen_validity': 'Definitive',
         },
         {
@@ -130,7 +130,7 @@ TEMPLATE = {
             'evidence': 'familial',
             'note': 'MIRAGE综合征(AD功能增强); SAMD9-GOF→骨髓衰竭+MDS/AML早发(通常<10岁); 生长受限+肾上腺发育不良+感染+肠病; 体细胞遗传挽救(monosomy 7/del7q/SAMD9回复突变)自发造血恢复; 需与SAMD9L共同评估',
             'phenotype_assoc': 'MIRAGE(AD-GOF);SAMD9→骨髓衰竭→儿童MDS;-7/del7q遗传挽救;肾上腺发育不良;germline+rescue双相',
-            'key_domains': 'SAM域;N端Ala/Gly富集区;APAF1-样域(凋亡相关)',
+            'key_domains': 'SAM域;N端Ala/Gly富集区;APAF1-样域(凋亡相关);SAM(域,aa14-78);Disordered(区,aa83-135)',
             'clingen_validity': 'Strong',
         },
         {
@@ -142,7 +142,7 @@ TEMPLATE = {
             'evidence': 'familial',
             'note': '共济失调-全血细胞减少综合征(AD功能增强); SAMD9L-GOF→小脑萎缩+全血细胞减少+MDS/AML; 体细胞遗传挽救(monosomy 7→SAMD9L丢失→造血恢复→MDS风险降低); 儿童发病; 与SAMD9表型重叠',
             'phenotype_assoc': 'ATXPC(AD-GOF);共济失调+全血细胞减少→MDS;-7遗传挽救;SAM家族;与MIRAGE重叠',
-            'key_domains': 'SAM域;Ala/Gly富集区;APAF1-样域',
+            'key_domains': 'SAM域;Ala/Gly富集区;APAF1-样域;SAM(域,aa14-79);Disordered(区,aa76-122)',
             'clingen_validity': 'Strong',
         },
         {
@@ -154,7 +154,7 @@ TEMPLATE = {
             'evidence': 'familial',
             'note': '家族性骨髓再生障碍/MDS(AD); SRP72-LOF→信号识别颗粒组装缺陷→骨髓衰竭→MDS/AML; 先天性感音神经性耳聋+骨髓衰竭; 罕见(仅报道数个家系)',
             'phenotype_assoc': 'BMA/MDS(AD);SRP→蛋白靶向缺陷;骨髓衰竭→MDS;伴耳聋;极罕见(<10家系)',
-            'key_domains': 'SRP72核心域;SRP68结合域;SRP RNA结合域;信号肽识别颗粒SRP成分',
+            'key_domains': 'SRP72核心域;SRP68结合域;SRP RNA结合域;信号肽识别颗粒SRP成分;Required for interaction with SRP68(区,aa9-163);Required for the interaction with the SRP68/7SL RNA complex(区,aa379-509);Disordered(区,aa532-671);RNA-binding(区,aa545-617)',
             'clingen_validity': 'Moderate',
         },
         {
@@ -166,7 +166,7 @@ TEMPLATE = {
             'evidence': 'familial',
             'note': '端粒病(AD/AR); TERT-LOF→端粒缩短→骨髓衰竭/再生障碍性贫血→MDS/AML(~10%); 肺纤维化+肝硬化+早白; 端粒极短(<1st百分位); 雄激素/造血干细胞移植治疗',
             'phenotype_assoc': '端粒病(AD/AR);端粒酶逆转录酶;骨髓衰竭→MDS/AML;肺纤维化;肝硬化;早白;DC/TBD谱系',
-            'key_domains': 'TEN域(N端);TRBD(端粒酶RNA结合域);RT域(逆转录酶核心):手指/手掌/拇指亚域;CTE(C端延伸)',
+            'key_domains': 'TEN域(N端);TRBD(端粒酶RNA结合域);RT域(逆转录酶核心):手指/手掌/拇指亚域;CTE(C端延伸);Reverse transcriptase(域,aa605-935);RNA-interacting domain 1(区,aa1-230);GQ motif(区,aa58-197);Required for regulating specificity for telomeric DNA and for processivity for primer elongation(区,aa137-141);Disordered(区,aa210-320);Linker(区,aa231-324)',
             'clingen_validity': 'Definitive',
         },
         {
@@ -214,7 +214,7 @@ TEMPLATE = {
             'evidence': 'familial',
             'note': 'Fanconi贫血D1型(AR/FANCD1); BRCA2双等位基因LOF→先天性骨髓衰竭→AML/髓系肿瘤(极高外显,通常<5岁); 杂合→遗传性乳腺癌/卵巢癌(HBOC,AD); Wilms瘤/脑瘤(MEDULLOBLASTOMA)风险',
             'phenotype_assoc': 'FA-D1/HBOC;BRCA2双等位→极早发髓系肿瘤<5岁;杂合→乳腺癌/卵巢癌/Wilms/脑瘤',
-            'key_domains': 'BRC重复×8(RAD51结合);DBD(ssDNA/dsDNA结合);TR2(C端);NLS;OB-fold(C端1109-3418)',
+            'key_domains': 'BRC重复×8(RAD51结合);DBD(ssDNA/dsDNA结合);TR2(C端);NLS;OB-fold(C端1109-3418);Interaction with PALB2(区,aa1-40);Disordered(区,aa37-68);Disordered(区,aa358-381);Interaction with NPM1(区,aa639-1000);Interaction with RAD51(区,aa1003-2082);Interaction with POLH(区,aa1338-1781)',
             'clingen_validity': 'Definitive',
         },
 
@@ -556,28 +556,24 @@ TEMPLATE = {
             'note': 'Jaiswal et al. 2025 Nat Genet; 最大CHIP GWAS; 新胚系位点→CH克隆扩增→MDS/AML风险; TET2/DNMT3A/ASXL1/TCL1A',
         },
     ],
-    'key_regions': {
-        'GATA2': {
-            'note': 'ZF1(aa295-318) + ZF2(aa348-374): C4型锌指; LOF→造血衰竭',
-            'regions': [(295, 374)],
-        },
-        'DDX41': {
-            'note': 'DEAD-box解旋酶域(aa151-350); R525体细胞热点',
-            'regions': [(151, 350), (520, 530)],
-        },
-        'RUNX1': {
-            'note': 'Runt同源域(aa50-177): DBD+CBFβ二聚化; TAD(aa290-370)',
-            'regions': [(50, 177), (290, 370)],
-        },
-        'CEBPA': {
-            'note': 'TAD1(aa1-70); bZIP(aa278-358): DBD+二聚化',
-            'regions': [(1, 70), (278, 358)],
-        },
-        'ETV6': {'note': 'PNT/HLH(aa38-124); ETS DBD(aa334-414)', 'regions': [(38, 124), (334, 414)]},
-        'ERG': {'note': 'PNT/pontin(aa120-200); ETS DBD(aa290-370)', 'regions': [(120, 200), (290, 370)]},
-        'TP53': {'note': 'DBD(aa102-292): 突变热点; 四聚化(aa323-356)', 'regions': [(102, 292), (323, 356)]},
-        'TERT': {'note': 'RT域(aa600-950): 端粒酶核心', 'regions': [(600, 950)]},
-        'SBDS': {'note': 'D1-D3域(aa1-250): 60S核糖体组装', 'regions': [(1, 250)]},
-        'FANCA': {'note': 'FA核心复合体结合域(aa1-700)', 'regions': [(1, 700)]},
+        'key_regions': {
+        'ANKRD26': {'note': 'ANK重复域(N端);卷曲螺旋域(C端):信号通路支架;THAP1互作域;Disordered(区,aa1-41);Disordered(区,aa222-274);Disordered(区,aa504', 'regions': [(1, 41), (222, 274), (504, 630), (650, 698), (892, 912)]},
+        'ATM': {'note': 'FAT域;PI3K样催化域(aa2712-2962):PIKK超家族;FATC域;N端HEAT重复', 'regions': [(2712, 2962)]},
+        'BRCA2': {'note': 'BRC重复×8(RAD51结合);DBD(ssDNA/dsDNA结合);TR2(C端);NLS;OB-fold(C端1109-3418);Interaction with PALB2(区,aa1-40', 'regions': [(1, 40), (37, 68), (358, 381), (639, 1000), (1003, 2082), (1338, 1781)]},
+        'CEBPA': {'note': 'TAD1(aa1-70);TAD2(aa71-97):转录激活域;bZIP域(aa278-358):碱性区(DBD)+亮氨酸拉链(二聚化)', 'regions': [(1, 70), (71, 97), (278, 358)]},
+        'DDX41': {'note': 'DEAD-box RNA解旋酶域(aa151-350);Q基序;Walker A/B ATPase;R525热点突变位点(体细胞协同)', 'regions': [(151, 350)]},
+        'ELANE': {'note': '信号肽(aa1-29);前体域(aa30-41);成熟弹性蛋白酶催化域(aa42-267):Ser-His-Asp催化三联体', 'regions': [(1, 29), (30, 41), (42, 267)]},
+        'ERG': {'note': 'PNT域(aa120-200):ETS家族N端尖域;ETS DNA结合域(aa290-370):翼状螺旋-转角-螺旋;GATA1/FOS互作域', 'regions': [(120, 200), (290, 370)]},
+        'ETV6': {'note': 'PNT/HLH域(aa38-124):聚合/转录抑制;ETS DNA结合域(aa334-414):翼状螺旋-转角-螺旋', 'regions': [(38, 124), (334, 414)]},
+        'FANCA': {'note': 'FANCG互作域(aa1-700);FANCF结合域;FANCE结合域;FANCD2/FANCI单泛素化上游(FA核心复合体)', 'regions': [(1, 700)]},
+        'GATA2': {'note': 'ZF1(aa295-318);ZF2(aa348-374):C4型锌指-DNA结合域;N端转录激活域;N端ZF介导FOG1互作', 'regions': [(295, 318), (348, 374)]},
+        'NF1': {'note': 'GRD(GAP相关域,aa1198-1530):RAS GAP活性;SEC14-PH域;CRAL-TRIO域;C端', 'regions': [(1198, 1530)]},
+        'RUNX1': {'note': 'Runt同源域(aa50-177):DNA结合+CBFβ异源二聚化;N端;转录激活域(aa290-370);VWRPY基序(TLE/Groucho结合)', 'regions': [(50, 177), (290, 370)]},
+        'SAMD9': {'note': 'SAM域;N端Ala/Gly富集区;APAF1-样域(凋亡相关);SAM(域,aa14-78);Disordered(区,aa83-135)', 'regions': [(14, 78), (83, 135)]},
+        'SAMD9L': {'note': 'SAM域;Ala/Gly富集区;APAF1-样域;SAM(域,aa14-79);Disordered(区,aa76-122)', 'regions': [(14, 79), (76, 122)]},
+        'SBDS': {'note': 'D1域(aa1-96):FYSH蛋白;D2域(aa97-170);D3域(aa171-250):EF-2 GTPase结合;核糖体60S组装', 'regions': [(1, 96), (97, 170), (171, 250)]},
+        'SRP72': {'note': 'SRP72核心域;SRP68结合域;SRP RNA结合域;信号肽识别颗粒SRP成分;Required for interaction with SRP68(区,aa9-163);Required fo', 'regions': [(9, 163), (379, 509), (532, 671), (545, 617)]},
+        'TERT': {'note': 'TEN域(N端);TRBD(端粒酶RNA结合域);RT域(逆转录酶核心):手指/手掌/拇指亚域;CTE(C端延伸);Reverse transcriptase(域,aa605-935);RNA-int', 'regions': [(605, 935), (1, 230), (58, 197), (137, 141), (210, 320), (231, 324)]},
+        'TP53': {'note': 'TAD1(aa1-42);TAD2(aa43-63);PRD(脯氨酸富集域);DBD(aa102-292):核心DNA结合域(突变热点);四聚化域(aa323-356);C端调节域', 'regions': [(1, 42), (43, 63), (102, 292), (323, 356)]},
     },
 }
