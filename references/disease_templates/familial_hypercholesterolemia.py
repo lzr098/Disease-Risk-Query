@@ -712,4 +712,23 @@ TEMPLATE = {   'aliases': [   'familial hypercholesterolemia',
                               'note': 'GLGC (Teslovich et al. 2010 Nature); 100K样本; 95 lipid loci'},
                           {   'pmid': '32203549',
                               'title': 'The polygenic and monogenic basis of blood lipids and coronary artery disease',
-                              'note': 'GLGC + UK Biobank (Klarin et al. 2018); lipid GWAS ~300K'}]}
+                              'note': 'GLGC + UK Biobank (Klarin et al. 2018); lipid GWAS ~300K'}],
+    'key_regions': {
+        'APOB': {
+            'note': 'βα1域(LDLR结合aa3359-3369);βα2域;C端脂蛋白锚定;N端脂质转移',
+            'regions': [(3359, 3369)],
+        },
+        'APOE': {
+            'note': 'LDL受体结合域(aa136-150);脂质结合域(244-272)',
+            'regions': [(136, 150)],
+        },
+        'LDLR': {
+            'note': '配体结合域(aa1-322);EGF前体同源域(aa323-698);O-糖基化茎域;跨膜域;NPxY内吞信号',
+            'regions': [(1, 322), (323, 698)],
+        },
+        'PCSK9': {
+            'note': '前体域(aa31-152,自催化切割);催化域(aa153-452);C端域(aa453-692)含M2M3重复',
+            'regions': [(31, 152), (153, 452), (453, 692)],
+        },
+    },
+}

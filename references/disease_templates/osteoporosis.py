@@ -866,4 +866,6 @@ TEMPLATE = {   'aliases': [   'osteoporosis',
                           {   'pmid': '26234160',
                               'title': 'Whole-genome sequencing identifies EN1 as a determinant of bone density and '
                                        'fracture',
-                              'note': 'Zheng et al. 2015 Nature; WGS骨质疏松/骨折'}]}
+                              'note': 'Zheng et al. 2015 Nature; WGS骨质疏松/骨折'}],
+    'key_regions': {},
+}

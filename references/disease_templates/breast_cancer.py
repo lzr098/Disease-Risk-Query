@@ -1042,4 +1042,23 @@ TEMPLATE = {   'aliases': [   'breast cancer',
                           {   'pmid': '23535729',
                               'title': 'Large-scale genotyping identifies 41 new loci associated with breast cancer '
                                        'risk',
-                              'note': 'Michailidou et al. 2013 Nat Genet'}]}
+                              'note': 'Michailidou et al. 2013 Nat Genet'}],
+    'key_regions': {
+        'BRCA1': {
+            'note': 'RING域(aa1-109);BRCT×2(aa1646-1863);DNA损伤应答',
+            'regions': [(1, 109), (1646, 1863)],
+        },
+        'PTEN': {
+            'note': '磷酸酶域(aa123-130);C2域(aa186-351);PDZ结合基序',
+            'regions': [(123, 130), (186, 351)],
+        },
+        'STK11': {
+            'note': '激酶域(aa49-309);N端调节域;C端调节域',
+            'regions': [(49, 309)],
+        },
+        'TP53': {
+            'note': '反式激活域(aa1-42);DNA结合域(aa102-292);四聚化域(aa325-356)',
+            'regions': [(1, 42), (102, 292), (325, 356)],
+        },
+    },
+}

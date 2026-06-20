@@ -945,4 +945,6 @@ TEMPLATE = {   'aliases': [   'inflammatory bowel disease',
                           {   'pmid': '23128233',
                               'title': 'Host-microbe interactions have shaped the genetic architecture of inflammatory '
                                        'bowel disease',
-                              'note': 'Jostins et al. 2012 Nature; IBD GWAS meta ~75K; 163 loci'}]}
+                              'note': 'Jostins et al. 2012 Nature; IBD GWAS meta ~75K; 163 loci'}],
+    'key_regions': {},
+}

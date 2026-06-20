@@ -1043,4 +1043,11 @@ TEMPLATE = {   'aliases': [   'colorectal cancer',
                           {   'pmid': '18372905',
                               'title': 'Meta-analysis of genome-wide association data identifies four new '
                                        'susceptibility loci for colorectal cancer',
-                              'note': 'Houlston et al. 2008 Nat Genet; 初始CRC GWAS meta'}]}
+                              'note': 'Houlston et al. 2008 Nat Genet; 初始CRC GWAS meta'}],
+    'key_regions': {
+        'STK11': {
+            'note': '激酶域(aa49-309)',
+            'regions': [(49, 309)],
+        },
+    },
+}
