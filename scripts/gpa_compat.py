@@ -214,14 +214,17 @@ def _vep_marker_path(output_vcf: Path) -> Path:
     return output_vcf.parent / f"{output_vcf.name}.vep_marker"
 
 
-def _vep_output_fresh(input_vcf: Path, output_vcf: Path) -> bool:
+def _vep_output_fresh(input_vcf: Path, output_vcf: Path,
+                      *, require_gnomad: bool = False) -> bool:
     """Check whether a valid VEP output exists that matches the current input.
 
-    Returns True only when all three conditions hold:
+    Returns True only when all conditions hold:
     1. The output VCF exists and is non-zero.
     2. The marker file exists and its stored fingerprint (mtime + size) matches
        the current input VCF.
     3. The output VCF passes ``gzip -t`` integrity check.
+    4. If require_gnomad=True, the marker's gnomAD bit must be 1 (meaning the
+       previous run included gnomAD AF flags).
     """
     if not output_vcf.exists() or output_vcf.stat().st_size == 0:
         return False
@@ -232,9 +235,10 @@ def _vep_output_fresh(input_vcf: Path, output_vcf: Path) -> bool:
 
     try:
         parts = marker.read_text().strip().split()
-        if len(parts) != 2:
+        if len(parts) < 2:
             return False
         stored_mtime, stored_size = int(parts[0]), int(parts[1])
+        gnomad_bit = parts[2] if len(parts) >= 3 else "0"
     except (ValueError, OSError):
         return False
 
@@ -244,6 +248,11 @@ def _vep_output_fresh(input_vcf: Path, output_vcf: Path) -> bool:
     except OSError:
         return False
     if stored_mtime != int(st.st_mtime) or stored_size != st.st_size:
+        return False
+
+    # gnomAD requirement check: if cache is now available but previous run
+    # didn't include gnomAD AF, force re-run
+    if require_gnomad and gnomad_bit != "1":
         return False
 
     # gzip integrity: detect truncated / corrupt output
@@ -258,11 +267,19 @@ def _vep_output_fresh(input_vcf: Path, output_vcf: Path) -> bool:
     return True
 
 
-def _write_vep_marker(input_vcf: Path, output_vcf: Path) -> None:
-    """Persist the input fingerprint so the output can be reused later."""
+def _write_vep_marker(input_vcf: Path, output_vcf: Path,
+                      *, gnomad_available: bool = False) -> None:
+    """Persist the input fingerprint so the output can be reused later.
+
+    Includes gnomAD availability status so that a run without gnomAD AF
+    (cache unavailable) is automatically invalidated when the cache comes back.
+    """
     try:
         st = input_vcf.stat()
-        _vep_marker_path(output_vcf).write_text(f"{int(st.st_mtime)} {st.st_size}")
+        gnomad_bit = "1" if gnomad_available else "0"
+        _vep_marker_path(output_vcf).write_text(
+            f"{int(st.st_mtime)} {st.st_size} {gnomad_bit}"
+        )
     except OSError:
         pass  # non-fatal — worst case VEP runs again next time
 
@@ -283,8 +300,14 @@ def pre_annotate_with_vep(
     output_vcf = Path(output_vcf)
     output_vcf.parent.mkdir(parents=True, exist_ok=True)
 
+    cache_dir = Path(vep_cache or VEP_CACHE).expanduser()
+    cache_available = cache_dir.exists() and (cache_dir / "homo_sapiens").exists()
+
     # --- Checkpoint resume: skip VEP if output is already fresh ---
-    if _vep_output_fresh(input_vcf, output_vcf):
+    # require_gnomad=True → if previous run lacked gnomAD AF (cache was
+    # unavailable at the time), force a fresh annotation so every report
+    # variant carries a population frequency.
+    if _vep_output_fresh(input_vcf, output_vcf, require_gnomad=cache_available):
         logger.info(
             "VEP checkpoint hit — output %s matches input %s, skipping annotation",
             output_vcf.name, input_vcf.name,
@@ -293,9 +316,6 @@ def pre_annotate_with_vep(
 
     if not _vep_docker_available():
         raise RuntimeError(f"VEP Docker image {VEP_IMAGE} not found. Pull it with: docker pull {VEP_IMAGE}")
-
-    cache_dir = Path(vep_cache or VEP_CACHE).expanduser()
-    cache_available = cache_dir.exists() and (cache_dir / "homo_sapiens").exists()
 
     assembly = genome if genome in {"GRCh38", "GRCh37"} else "GRCh38"
 
@@ -384,7 +404,7 @@ def pre_annotate_with_vep(
             check=True, capture_output=True, text=True,
         )
         subprocess.run(["bcftools", "index", str(gz_path)], check=True, capture_output=True, text=True)
-        _write_vep_marker(input_vcf, gz_path)
+        _write_vep_marker(input_vcf, gz_path, gnomad_available=cache_available)
         return gz_path
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
