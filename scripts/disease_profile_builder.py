@@ -107,22 +107,41 @@ def _normalize_builtin_ref(key: str, ref: dict[str, Any]) -> dict[str, Any]:
         if r.get("chrom") and int(r.get("start", 0)) < int(r.get("end", 0))
     ]
 
-    # key_regions: protein domain info for domain-dive
+    # key_regions: protein domain info for domain-dive.
+    # Supports two formats:
+    #   legacy: regions are (start, end) tuples → auto-convert to dicts
+    #   normalised: regions are {"name": ..., "residues": ..., "note": ...} dicts
     key_regions = ref.get("key_regions", {})
-    normalized["key_regions"] = {
-        gene: {
-            "note": info.get("note", ""),
-            "regions": [
-                {"name": r.get("name", ""), "residues": r.get("residues", ""), "note": r.get("note", "")}
-                for r in info.get("regions", [])
-            ],
-            "critical_residues": [
-                {"residue": r.get("residue", ""), "note": r.get("note", "")}
-                for r in info.get("critical_residues", [])
-            ],
+    normalized["key_regions"] = {}
+    for gene, info in key_regions.items():
+        note = info.get("note", "") if isinstance(info, dict) else ""
+        raw_regions = info.get("regions", []) if isinstance(info, dict) else []
+        raw_residues = info.get("critical_residues", []) if isinstance(info, dict) else []
+
+        regions: list[dict] = []
+        for r in raw_regions:
+            if isinstance(r, dict):
+                regions.append({"name": r.get("name", ""), "residues": r.get("residues", ""), "note": r.get("note", "")})
+            elif isinstance(r, (tuple, list)) and len(r) >= 2:
+                # Legacy format: (start, end) or (start, end, label)
+                regions.append({"name": str(r[2]) if len(r) > 2 else "", "residues": f"{r[0]}-{r[1]}", "note": ""})
+            else:
+                regions.append({"name": "", "residues": str(r), "note": ""})
+
+        critical_residues: list[dict] = []
+        for r in raw_residues:
+            if isinstance(r, dict):
+                critical_residues.append({"residue": r.get("residue", ""), "note": r.get("note", "")})
+            elif isinstance(r, (tuple, list)) and len(r) >= 1:
+                critical_residues.append({"residue": str(r[0]), "note": str(r[1]) if len(r) > 1 else ""})
+            else:
+                critical_residues.append({"residue": str(r), "note": ""})
+
+        normalized["key_regions"][gene] = {
+            "note": note,
+            "regions": regions,
+            "critical_residues": critical_residues,
         }
-        for gene, info in key_regions.items()
-    }
 
     # Ensure contribution_model exists
     if not normalized["contribution_model"]:

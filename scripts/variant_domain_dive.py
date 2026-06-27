@@ -53,11 +53,44 @@ def _parse_residue(residue_str: str) -> tuple[str, int]:
 
 
 def get_disease_key_regions(disease_name: str) -> dict[str, dict]:
-    """Return key_regions for a disease from built-in templates."""
+    """Return key_regions for a disease from built-in templates.
+
+    Normalises legacy tuple-format regions (start, end) to the standard
+    dict format {"name": ..., "residues": ..., "note": ...} for compatibility.
+    """
     key = resolve_builtin_disease_key(disease_name)
     if not key:
         return {}
-    return DISEASE_BUILTIN_REFS[key].get("key_regions", {})
+    raw_regions = DISEASE_BUILTIN_REFS[key].get("key_regions", {})
+    return _normalize_key_regions(raw_regions)
+
+
+def _normalize_key_regions(raw: dict) -> dict[str, dict]:
+    """Convert tuple-format regions to dict format if needed."""
+    normalized: dict[str, dict] = {}
+    for gene, info in raw.items():
+        if not isinstance(info, dict):
+            continue
+        note = info.get("note", "")
+        raw_regions_list = info.get("regions", [])
+        raw_residues_list = info.get("critical_residues", [])
+
+        regions = []
+        for r in raw_regions_list:
+            if isinstance(r, dict):
+                regions.append({"name": r.get("name", ""), "residues": r.get("residues", ""), "note": r.get("note", "")})
+            elif isinstance(r, (tuple, list)) and len(r) >= 2:
+                regions.append({"name": "", "residues": f"{r[0]}-{r[1]}", "note": ""})
+
+        crit_residues = []
+        for r in raw_residues_list:
+            if isinstance(r, dict):
+                crit_residues.append({"residue": r.get("residue", ""), "note": r.get("note", "")})
+            elif isinstance(r, (tuple, list)) and len(r) >= 1:
+                crit_residues.append({"residue": str(r[0]), "note": str(r[1]) if len(r) > 1 else ""})
+
+        normalized[gene] = {"note": note, "regions": regions, "critical_residues": crit_residues}
+    return normalized
 
 
 def assess_variant_in_key_regions(

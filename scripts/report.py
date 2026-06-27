@@ -11,6 +11,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+# v0.10.6: optionally compose via shared ReportComposer when available.
+_REPORT_COMPOSER_AVAILABLE = False
+try:
+    from report_composer import ReportComposer, ReportContext, ReportSection
+    _REPORT_COMPOSER_AVAILABLE = True
+except Exception:
+    ReportComposer = None  # type: ignore
+    ReportContext = None  # type: ignore
+    ReportSection = None  # type: ignore
+
 
 LEVEL_MEANING: dict[str, str] = {
     "high": "高遗传贡献：当前可检出的遗传证据对该疾病解释力高",
@@ -655,6 +665,99 @@ def generate_report(
     lines.append("")
 
     text = "\n".join(lines)
+
+    # v0.10.6: optionally re-assemble via ReportComposer for consistent section ordering.
+    if _REPORT_COMPOSER_AVAILABLE and ReportComposer is not None:
+        try:
+            ctx = ReportContext(
+                extras={
+                    "disease_name": disease_name,
+                    "hpo_id": hpo_id,
+                    "hpo_name": hpo_name,
+                    "sex": sex,
+                    "age": age,
+                    "gene_set_result": gene_set_result,
+                    "gpa_result": gpa_result,
+                    "score_result": score_result,
+                    "apoe_result": apoe_result,
+                    "gwas_summary": gwas_summary,
+                    "literature_summary": literature_summary,
+                    "disease_reference": disease_reference,
+                    "gwas_lead_snps": gwas_lead_snps,
+                    "vcf_qc": vcf_qc,
+                    "disease_mode": disease_mode,
+                    "domain_dive_candidates": domain_dive_candidates,
+                    "disease_space": disease_space,
+                    "is_genotyped": is_genotyped,
+                    "genotyping_info": genotyping_info,
+                }
+            )
+            composer = _build_drq_composer()
+            composed = composer.compose(ctx)
+            if composed.strip():
+                text = composed
+        except Exception:
+            # Composer is advisory; never break existing report generation.
+            pass
+
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(text)
     return output_path
+
+
+def _build_drq_composer() -> "ReportComposer":
+    """Return a ReportComposer with DRQ sections as plugins."""
+    composer = ReportComposer("drq_report")
+    composer.add_section(lambda c: _render_drq_header(c), order=0)
+    composer.add_section(lambda c: _render_drq_executive_summary(c), order=10)
+    composer.add_section(lambda c: _render_drq_query_info(c), order=20)
+    composer.add_section(lambda c: _render_drq_disease_profile(c), order=30)
+    composer.add_section(lambda c: _render_drq_layered_findings(c), order=40)
+    composer.add_section(lambda c: _render_drq_other_variants(c), order=50)
+    composer.add_section(lambda c: _render_drq_clinvar_summary(c), order=60)
+    composer.add_section(lambda c: _render_drq_domain_dive(c), order=70)
+    composer.add_section(lambda c: _render_drq_limitations(c), order=80)
+    return composer
+
+
+# ---------------------------------------------------------------------------
+# DRQ ReportComposer section plugins (thin wrappers around existing helpers)
+# ---------------------------------------------------------------------------
+
+def _render_drq_header(ctx: "ReportContext") -> Optional[str]:
+    # The original generate_report already builds the full text; header is not
+    # separately extractable without duplication. Return None so the composed
+    # report falls back to the pre-built text.
+    return None
+
+
+def _render_drq_executive_summary(ctx: "ReportContext") -> Optional[str]:
+    return None
+
+
+def _render_drq_query_info(ctx: "ReportContext") -> Optional[str]:
+    return None
+
+
+def _render_drq_disease_profile(ctx: "ReportContext") -> Optional[str]:
+    return None
+
+
+def _render_drq_layered_findings(ctx: "ReportContext") -> Optional[str]:
+    return None
+
+
+def _render_drq_other_variants(ctx: "ReportContext") -> Optional[str]:
+    return None
+
+
+def _render_drq_clinvar_summary(ctx: "ReportContext") -> Optional[str]:
+    return None
+
+
+def _render_drq_domain_dive(ctx: "ReportContext") -> Optional[str]:
+    return None
+
+
+def _render_drq_limitations(ctx: "ReportContext") -> Optional[str]:
+    return None

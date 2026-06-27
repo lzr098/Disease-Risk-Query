@@ -205,19 +205,23 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
         return 1
 
+    score = result.get("score", {})
+    gene_set = result.get("gene_set", {})
+    gpa = result.get("gpa", {})
+
     print(json.dumps({
         "success": True,
         "hpo_id": result.get("hpo_id"),
         "hpo_name": result.get("hpo_name"),
         "is_genotyped": result.get("is_genotyped"),
-        "gene_count": result["gene_set"]["total"],
-        "gene_set_truncated": result["gene_set"].get("truncated", False),
-        "tier1": len(result["gpa"].get("tier1_variants", [])),
-        "tier2": len(result["gpa"].get("tier2_variants", [])),
-        "tier3": len(result["gpa"].get("tier3_variants", [])),
-        "total_score": result["score"]["total_score"],
-        "risk_level": result["score"].get("risk_level"),
-        "contribution_level": result["score"].get("contribution_level"),
+        "gene_count": gene_set.get("total", 0),
+        "gene_set_truncated": gene_set.get("truncated", False),
+        "tier1": len(gpa.get("tier1_variants", [])),
+        "tier2": len(gpa.get("tier2_variants", [])),
+        "tier3": len(gpa.get("tier3_variants", [])),
+        "total_score": score.get("total_score"),
+        "risk_level": score.get("risk_level"),
+        "contribution_level": score.get("contribution_level"),
         "disease_mode": result.get("disease_mode", "mendelian"),
         "apoe": result.get("apoe"),
         "vcf_common_variants_filtered": result.get("vcf_qc", {}).get("common_variants_filtered", False),
@@ -227,8 +231,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         "gwas_lead_snp_hits": len([s for s in result.get("gwas_lead_snps", []) if s.get("sample_gt")]),
         "literature_hits": len(result.get("literature_summary", {}).get("variant_hits", [])),
         "literature_genes": result.get("literature_summary", {}).get("gene_hits", []),
-        "report_path": result["report_path"],
-        "work_dir": result["work_dir"],
+        "report_path": result.get("report_path"),
+        "work_dir": result.get("work_dir"),
     }, indent=2, ensure_ascii=False, default=str))
 
     return 0
