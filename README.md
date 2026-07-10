@@ -1,6 +1,6 @@
 # GPA Disease Risk Query &nbsp;·&nbsp; 单样本疾病遗传风险查询
 
-[![version](https://img.shields.io/badge/version-2.0.0-blue)](https://github.com/lzr098/Disease-Risk-Query)
+[![version](https://img.shields.io/badge/version-2.1.0-blue)](https://github.com/lzr098/Disease-Risk-Query)
 [![python](https://img.shields.io/badge/python-3.10%2B-green)](https://www.python.org/)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
@@ -17,7 +17,7 @@
 - Annotates with Ensembl VEP (SIFT, PolyPhen, CADD, SpliceAI, REVEL, gnomAD AF)
 - Classifies variants into **Tier 1** (high risk) / **Tier 2** (moderate) / **Tier 3** (low)
 - Enriches with ClinVar P/LP, OMIM phenotypes, GWAS lead SNPs, key literature
-- Supports **pre-built disease templates** for 12 common diseases
+- Supports **pre-built disease templates** for 14 common diseases
 - Dynamic gene set construction for unmatched diseases
 - China-population reference (CHN_AF from local VCF)
 
@@ -28,7 +28,7 @@
 - VEP 功能注释 (SIFT, PolyPhen, CADD, SpliceAI, REVEL, gnomAD 频率)
 - **Tier 1** (高风险) / **Tier 2** (中风险) / **Tier 3** (低风险) 三级分层
 - ClinVar 致病/可能致病变异 + OMIM 表型 + GWAS lead SNP + 关键文献佐证
-- 支持 **12 个内置疾病模板** (阿尔茨海默病、帕金森、心梗、2型糖尿病、乳腺癌、结直肠癌、IBD、骨质疏松、FH、MDS 等)
+- 支持 **14 个内置疾病模板** (阿尔茨海默病、帕金森、心梗、2型糖尿病、乳腺癌、结直肠癌、IBD、骨质疏松、FH、MDS、AGA、前列腺癌等)
 - 未匹配疾病**动态基因集构建**
 - 中国人群频率参考 (CHN_AF)
 
@@ -37,38 +37,40 @@
 ## Quick Start · 快速开始
 
 ```bash
-python scripts/run_P010.py \
+python scripts/main.py \
   --vcf patient.vcf.gz \
   --disease "阿尔茨海默病" \
   --output-dir ./alzheimer_report
 ```
 
 ```bash
-python scripts/run_P010.py \
+python scripts/main.py \
   --vcf patient.vcf.gz \
   --disease "breast cancer" \
   --output-dir ./breast_cancer_report \
-  --proxy http://127.0.0.1:7890
+  --refresh-cache
 ```
 
 ---
 
 ## Built-in Disease Templates · 内置疾病模板
 
-| Disease · 疾病 | Mode · 模式 | Genes · 基因数 | GWAS SNPs | ClinVar P/LP |
-|---|---|---|---|---|
-| Alzheimer disease · 阿尔茨海默病 | mixed | 245 | 77 | 13 |
-| Parkinson disease · 帕金森病 | mixed | 170 | 39 | 10 |
-| Adult vision disorders · 成人视力障碍 | complex | 83 | 56 | 10 |
-| Myocardial infarction / CAD · 心肌梗死 | complex | 54 | 37 | 8 |
-| Type 2 diabetes · 2型糖尿病 | complex | 49 | 63 | 6 |
-| Hyperuricemia / Gout · 高尿酸血症 | complex | 69 | 40 | 8 |
-| Breast cancer · 乳腺癌 | complex | 32 | 44 | 12 |
-| Colorectal cancer · 结直肠癌 | complex | 33 | 36 | 18 |
-| IBD · 炎症性肠病 | complex | 29 | 46 | 3 |
-| Osteoporosis · 骨质疏松 | complex | 32 | 49 | 5 |
-| Familial hypercholesterolemia · 家族性高胆固醇血症 | mendelian | 32 | 18 | 38 |
-| **Myelodysplastic syndromes · 骨髓增生异常综合征** | **mixed** | **24** | **6** | **3** |
+| Disease · 疾病 | Mode · 模式 | Genes · 基因数 | GWAS SNPs | PRS High | ClinVar P/LP |
+|---|---|---|---|---|---|
+| Alzheimer disease · 阿尔茨海默病 | mixed | 245 | 77 | 3 | 23 |
+| Parkinson disease · 帕金森病 | mixed | 170 | 49 | 0 | 30 |
+| Adult vision disorders · 成人视力障碍 | complex | 83 | 56 | 0 | 53 |
+| Myocardial infarction / CAD · 心肌梗死 | complex | 52 | 36 | 3 | 17 |
+| Type 2 diabetes · 2型糖尿病 | complex | 30 | 21 | 5 | 17 |
+| Hyperuricemia / Gout · 高尿酸血症 | complex | 61 | 48 | 3 | 62 |
+| Breast cancer · 乳腺癌 | complex | 32 | 20 | 0 | 29 |
+| Colorectal cancer · 结直肠癌 | complex | 33 | 19 | 0 | 29 |
+| IBD · 炎症性肠病 | complex | 29 | 31 | 0 | 14 |
+| Osteoporosis · 骨质疏松 | complex | 32 | 22 | 0 | 15 |
+| Familial hypercholesterolemia · 家族性高胆固醇血症 | complex | 32 | 9 | 0 | 16 |
+| Myelodysplastic syndromes · 骨髓增生异常综合征 | mixed | 24 | 3 | 0 | 6 |
+| **Androgenetic alopecia · 雄激素性脱发** | **complex** | **37** | **9** | **4** | **2** |
+| **Prostate cancer · 前列腺癌** | **complex** | **23** | **6** | **0** | **7** |
 
 ---
 
@@ -111,6 +113,7 @@ Each gene is scored on multiple axes:
 | **Key Domains** | Missense/frameshift in critical protein domains → bonus |
 | **ClinGen Validity** | Definitive × 1.0, Strong × 0.85, Moderate × 0.70, Limited × 0.50 |
 | **GWAS Signal** | Lead SNP effect size (OR/beta), population AF |
+| **PRS High** | High-weight PRS variants (weight 0.9) for top GWAS loci |
 | **Literature Evidence** | PubMed PMID count, publication recency |
 | **Inheritance Match** | Dominant vs recessive vs X-linked pattern |
 
@@ -123,9 +126,11 @@ Each gene is scored on multiple axes:
 | `--vcf PATH` | Input germline VCF (required) |
 | `--disease "name"` | Disease name, Chinese or English (required) |
 | `--output-dir PATH` | Output directory |
-| `--proxy URL` | HTTPS proxy for API access |
 | `--offline` | Skip API queries, use only local data |
-| `--enrich` | Force dynamic gene set expansion even for built-in templates |
+| `--refresh-cache` | Force rebuild of disease reference cache |
+| `--disease-mode MODE` | Scoring mode: mendelian / complex / auto |
+| `--sex male\|female` | Sample sex (affects X-linked scoring) |
+| `--assume-genotyped` | Treat missing sites as ref/ref (genotyped VCF) |
 
 ---
 
@@ -161,6 +166,25 @@ Each gene is scored on multiple axes:
 | **GPA** | [lzr098/dgra-genomic-risk](https://github.com/lzr098/dgra-genomic-risk) | Whole-genome phenotype association |
 | **GPA Filter** | [lzr098/GPA-Filter](https://github.com/lzr098/GPA-Filter) | Genomic region pre-filter |
 | **sensory-genomics** | [lzr098/sensory-genomics-skill](https://github.com/lzr098/sensory-genomics-skill) | Five-sense genetic analysis |
+
+---
+
+## Changelog · 更新日志
+
+### v2.1.0 (2026-07-10)
+
+- **New template**: Androgenetic alopecia (AGA) — 37 genes, 9 GWAS SNPs, 4 PRS high, 10 genomic regions (Pirastu 2017)
+- **New template**: Prostate cancer — 23 genes, 6 GWAS SNPs, 7 ClinVar P/LP
+- **Bug fix**: `variant_class` field missing in `prs_variants_high` across 5 templates (MI, Alzheimer, T2D, Hyperuricemia, AGA) — `VariantWeight.from_dict()` silently ignored `'tier'` key, causing prs_high entries (weight 0.9) to be scored as gwas_prs (weight 0.3)
+- **AGA template optimization**: gene_set 16→37, added prs_variants_high (4), prs_variants (3), regions (10), core_genes (8), gwas_loci_genes (34), key_regions 3→8, key_literature 3→7, beta=ln(OR) for all GWAS SNPs
+- Template count: 12 → 14
+
+### v2.0.0
+
+- Initial public release with 12 disease templates
+- VEP Docker offline annotation support
+- Two-phase GPA pipeline
+- ReportComposer integration
 
 ---
 
