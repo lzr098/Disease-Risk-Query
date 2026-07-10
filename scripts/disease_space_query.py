@@ -298,6 +298,9 @@ def query_known_variants(
     finally:
         bed_path.unlink(missing_ok=True)
 
+    # Dedup key includes variant_class so that the same variant appearing in
+    # multiple lists (e.g. gwas_lead_snps AND prs_variants_high) is genotyped
+    # once per list, not silently dropped after the first match.
     found_keys: set[str] = set()
     results: list[KnownVariantGenotype] = []
     for line in proc.stdout.strip().split("\n"):
@@ -311,14 +314,15 @@ def query_known_variants(
         # so that variants appearing in both gwas_lead_snps and prs_variants_high
         # are both correctly genotyped.
         for v in variants:
-            if v.pos == pos and v.vcf_key not in found_keys:
+            dedup_key = f"{v.vcf_key}:{v.variant_class}"
+            if v.pos == pos and dedup_key not in found_keys:
                 matched = _match_record(v, parts)
                 if matched:
                     results.append(matched)
-                    found_keys.add(v.vcf_key)
+                    found_keys.add(dedup_key)
 
     # Infer ref/ref for absent variants
-    absent = [v for v in variants if v.vcf_key not in found_keys]
+    absent = [v for v in variants if f"{v.vcf_key}:{v.variant_class}" not in found_keys]
     for v in absent:
         results.append(_infer_ref_ref(v))
 
