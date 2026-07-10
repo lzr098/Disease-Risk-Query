@@ -1720,7 +1720,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                            'UBAP2',
                            'VEGFA',
                            'ZBTB38'],
-    'gwas_lead_snps': [   {   'rsid': 'rs10033900',
+    'gwas_lead_snps': [   {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs10033900',
                               'chrom': 'chr4',
                               'pos': 109737911,
                               'gene': 'CFI',
@@ -1734,7 +1735,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.168,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.15'},
-                          {   'rsid': 'rs10781182',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs10781182',
                               'chrom': 'chr9',
                               'pos': 74002804,
                               'gene': 'MIR6130',
@@ -1748,7 +1750,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.125,
                               'confidence': 'moderate',
                               'note': 'MIR6130; EAS AF=0.55 vs EUR=0.30, significant divergence'},
-                          {   'rsid': 'rs10922109',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs10922109',
                               'chrom': 'chr1',
                               'pos': 196735502,
                               'gene': 'CFH',
@@ -1762,7 +1765,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=2.63'},
-                          {   'rsid': 'rs11080055',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs11080055',
                               'chrom': 'chr17',
                               'pos': 28322698,
                               'gene': 'TMEM97',
@@ -1776,7 +1780,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.114,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.1'},
-                          {   'rsid': 'rs114092250',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs114092250',
                               'chrom': 'chr5',
                               'pos': 35494346,
                               'gene': 'PRLR',
@@ -1790,7 +1795,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.43'},
-                          {   'rsid': 'rs1142',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs1142',
                               'chrom': 'chr7',
                               'pos': 105115879,
                               'gene': 'SRPK2',
@@ -1804,7 +1810,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.125,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.11'},
-                          {   'rsid': 'rs11884770',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs11884770',
                               'chrom': 'chr2',
                               'pos': 227222204,
                               'gene': 'COL4A3',
@@ -1818,7 +1825,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.125,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.11'},
-                          {   'rsid': 'rs12019136',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs12019136',
                               'chrom': 'chr19',
                               'pos': 5835666,
                               'gene': 'FUT6',
@@ -1832,7 +1840,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.41'},
-                          {   'rsid': 'rs121913059',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs121913059',
                               'chrom': 'chr1',
                               'pos': 196747245,
                               'gene': 'CFH',
@@ -1846,7 +1855,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=20.28'},
-                          {   'rsid': 'rs12357257',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs12357257',
                               'chrom': 'chr10',
                               'pos': 24710664,
                               'gene': 'ARHGAP21',
@@ -1860,7 +1870,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.125,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.11'},
-                          {   'rsid': 'rs13278062',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs13278062',
                               'chrom': 'chr8',
                               'pos': 23225458,
                               'gene': 'TNFRSF10A',
@@ -1874,7 +1885,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.125,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.11'},
-                          {   'rsid': 'rs140647181',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs140647181',
                               'chrom': 'chr3',
                               'pos': 99461824,
                               'gene': 'LOC105374007',
@@ -1888,7 +1900,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.59'},
-                          {   'rsid': 'rs141853578',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs141853578',
                               'chrom': 'chr4',
                               'pos': 109764664,
                               'gene': 'CFI',
@@ -1902,7 +1915,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=3.64'},
-                          {   'rsid': 'rs147859257',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs147859257',
                               'chrom': 'chr19',
                               'pos': 6718135,
                               'gene': 'C3',
@@ -1916,7 +1930,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=2.86'},
-                          {   'rsid': 'rs148553336',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs148553336',
                               'chrom': 'chr1',
                               'pos': 196644043,
                               'gene': 'CFH',
@@ -1930,7 +1945,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=3.45'},
-                          {   'rsid': 'rs1626340',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs1626340',
                               'chrom': 'chr9',
                               'pos': 99161090,
                               'gene': 'TGFBR1',
@@ -1944,7 +1960,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.157,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.14'},
-                          {   'rsid': 'rs17231506',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs17231506',
                               'chrom': 'chr16',
                               'pos': 56960616,
                               'gene': 'CETP',
@@ -1958,7 +1975,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.178,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.16'},
-                          {   'rsid': 'rs181705462',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs181705462',
                               'chrom': 'chr6',
                               'pos': 31979250,
                               'gene': 'STK19',
@@ -1972,7 +1990,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.55'},
-                          {   'rsid': 'rs187328863',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs187328863',
                               'chrom': 'chr1',
                               'pos': 196411028,
                               'gene': 'KCNT2',
@@ -1986,7 +2005,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=2.27'},
-                          {   'rsid': 'rs191281603',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs191281603',
                               'chrom': 'chr1',
                               'pos': 196989521,
                               'gene': 'CFHR5',
@@ -2000,7 +2020,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.081,
                               'confidence': 'low',
                               'note': 'PGS002269 OR=1.07'},
-                          {   'rsid': 'rs201459901',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs201459901',
                               'chrom': 'chr20',
                               'pos': 58078669,
                               'gene': 'C20orf85',
@@ -2014,7 +2035,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.32'},
-                          {   'rsid': 'rs2043085',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs2043085',
                               'chrom': 'chr15',
                               'pos': 58388755,
                               'gene': 'LIPC',
@@ -2028,7 +2050,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.168,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.15'},
-                          {   'rsid': 'rs2070895',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs2070895',
                               'chrom': 'chr15',
                               'pos': 58431740,
                               'gene': 'LIPC',
@@ -2042,7 +2065,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.168,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.15'},
-                          {   'rsid': 'rs2230199',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs2230199',
                               'chrom': 'chr19',
                               'pos': 6718376,
                               'gene': 'C3',
@@ -2056,7 +2080,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'C3 R102G'},
-                          {   'rsid': 'rs2740488',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs2740488',
                               'chrom': 'chr9',
                               'pos': 104899461,
                               'gene': 'ABCA1',
@@ -2070,7 +2095,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.125,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.11'},
-                          {   'rsid': 'rs2842339',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs2842339',
                               'chrom': 'chr14',
                               'pos': 68520282,
                               'gene': 'RAD51B',
@@ -2084,7 +2110,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.157,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.14'},
-                          {   'rsid': 'rs3138141',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs3138141',
                               'chrom': 'chr12',
                               'pos': 55721994,
                               'gene': 'RDH5',
@@ -2098,7 +2125,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.178,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.16'},
-                          {   'rsid': 'rs35292876',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs35292876',
                               'chrom': 'chr1',
                               'pos': 196737512,
                               'gene': 'CFH',
@@ -2112,7 +2140,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=2.42'},
-                          {   'rsid': 'rs3750846',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs3750846',
                               'chrom': 'chr10',
                               'pos': 122456049,
                               'gene': 'ARMS2',
@@ -2126,7 +2155,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'ARMS2 A69S tagging SNP (LD proxy for rs10490924)'},
-                          {   'rsid': 'rs10490924',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs10490924',
                               'chrom': 'chr10',
                               'pos': 122454932,
                               'gene': 'ARMS2',
@@ -2140,7 +2170,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'ARMS2 c.205G>T (p.Ala69Ser), primary AMD causal variant at 10q26'},
-                          {   'rsid': 'rs11200638',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs11200638',
                               'chrom': 'chr10',
                               'pos': 122462960,
                               'gene': 'HTRA1',
@@ -2154,7 +2185,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'HTRA1 c.-625G>A, promoter variant, AMD risk at 10q26'},
-                          {   'rsid': 'rs429358',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs429358',
                               'chrom': 'chr19',
                               'pos': 44908684,
                               'gene': 'APOE',
@@ -2168,7 +2200,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'APOE ε4/ε2, AMD risk/protective'},
-                          {   'rsid': 'rs55975637',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs55975637',
                               'chrom': 'chr3',
                               'pos': 99701009,
                               'gene': 'COL8A1',
@@ -2182,7 +2215,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.168,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.15'},
-                          {   'rsid': 'rs1061170',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs1061170',
                               'chrom': 'chr1',
                               'pos': 196659237,
                               'gene': 'CFH',
@@ -2197,7 +2231,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'confidence': 'high',
                               'note': 'CFH c.1204T>C (p.Tyr402His, Y402H), primary AMD risk variant in complement '
                                       'pathway'},
-                          {   'rsid': 'rs570618',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs570618',
                               'chrom': 'chr1',
                               'pos': 196687934,
                               'gene': 'CFH',
@@ -2211,7 +2246,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=2.38'},
-                          {   'rsid': 'rs5754227',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs5754227',
                               'chrom': 'chr22',
                               'pos': 32709831,
                               'gene': 'SYN3',
@@ -2225,7 +2261,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.3'},
-                          {   'rsid': 'rs5817082',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs5817082',
                               'chrom': 'chr16',
                               'pos': 56963438,
                               'gene': 'CETP',
@@ -2239,7 +2276,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.209,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.19'},
-                          {   'rsid': 'rs61818925',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs61818925',
                               'chrom': 'chr1',
                               'pos': 196846320,
                               'gene': '_CFH (CFHR3',
@@ -2253,7 +2291,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.67'},
-                          {   'rsid': 'rs61941274',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs61941274',
                               'chrom': 'chr12',
                               'pos': 111694806,
                               'gene': 'ACAD10',
@@ -2267,7 +2306,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.51'},
-                          {   'rsid': 'rs61985136',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs61985136',
                               'chrom': 'chr14',
                               'pos': 68302482,
                               'gene': 'RAD51B',
@@ -2281,7 +2321,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.125,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.11'},
-                          {   'rsid': 'rs62247658',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs62247658',
                               'chrom': 'chr3',
                               'pos': 64729479,
                               'gene': 'ADAMTS9-AS2',
@@ -2295,7 +2336,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.157,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.14'},
-                          {   'rsid': 'rs62358361',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs62358361',
                               'chrom': 'chr5',
                               'pos': 39327786,
                               'gene': 'C9',
@@ -2309,7 +2351,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.3,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.8'},
-                          {   'rsid': 'rs6565597',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs6565597',
                               'chrom': 'chr17',
                               'pos': 81559795,
                               'gene': 'NPLOC4',
@@ -2323,7 +2366,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.147,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.13'},
-                          {   'rsid': 'rs67538026',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs67538026',
                               'chrom': 'chr19',
                               'pos': 1031439,
                               'gene': 'CNN2',
@@ -2337,7 +2381,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.125,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.11'},
-                          {   'rsid': 'rs72802342',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs72802342',
                               'chrom': 'chr16',
                               'pos': 75200974,
                               'gene': 'CTRB2',
@@ -2351,7 +2396,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.287,
                               'confidence': 'high',
                               'note': 'PGS002269 OR=1.27'},
-                          {   'rsid': 'rs73036519',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs73036519',
                               'chrom': 'chr19',
                               'pos': 45245104,
                               'gene': 'EXOC3L2',
@@ -2365,7 +2411,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.114,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.1'},
-                          {   'rsid': 'rs7803454',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs7803454',
                               'chrom': 'chr7',
                               'pos': 100393925,
                               'gene': 'PILRA',
@@ -2379,7 +2426,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.147,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.13'},
-                          {   'rsid': 'rs8135665',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs8135665',
                               'chrom': 'chr22',
                               'pos': 38080269,
                               'gene': 'SLC16A8',
@@ -2393,7 +2441,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.157,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.14'},
-                          {   'rsid': 'rs943080',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs943080',
                               'chrom': 'chr6',
                               'pos': 43858890,
                               'gene': 'POLR1C',
@@ -2407,7 +2456,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.157,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.14'},
-                          {   'rsid': 'rs9564692',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs9564692',
                               'chrom': 'chr13',
                               'pos': 31247103,
                               'gene': 'B3GLCT',
@@ -2421,7 +2471,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.136,
                               'confidence': 'moderate',
                               'note': 'PGS002269 OR=1.12'},
-                          {   'rsid': 'rs2157719',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs2157719',
                               'chrom': 'chr9',
                               'pos': 22003367,
                               'gene': 'CDKN2B-AS1',
@@ -2435,7 +2486,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.157,
                               'confidence': 'moderate',
                               'note': 'POAG GWAS locus CDKN2B-AS1'},
-                          {   'rsid': 'rs7555523',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs7555523',
                               'chrom': 'chr14',
                               'pos': 60788658,
                               'gene': 'SIX1',
@@ -2449,7 +2501,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.147,
                               'confidence': 'moderate',
                               'note': 'SIX1/SIX6 optic nerve locus'},
-                          {   'rsid': 'rs1900004',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs1900004',
                               'chrom': 'chr9',
                               'pos': 107560750,
                               'gene': 'ABCA1',
@@ -2463,7 +2516,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.114,
                               'confidence': 'moderate',
                               'note': 'ABCA1 POAG locus'},
-                          {   'rsid': 'rs7081455',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs7081455',
                               'chrom': 'chr1',
                               'pos': 71500609,
                               'gene': 'PLXDC2',
@@ -2477,7 +2531,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.136,
                               'confidence': 'moderate',
                               'note': 'PLXDC2/TMCO1 POAG locus'},
-                          {   'rsid': 'rs1052990',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs1052990',
                               'chrom': 'chr7',
                               'pos': 115993814,
                               'gene': 'CAV1',
@@ -2491,7 +2546,8 @@ TEMPLATE = {   'aliases': ['vision disorders', 'vision loss', 'adult-onset visio
                               'contribution_score': 0.125,
                               'confidence': 'moderate',
                               'note': 'CAV1/CAV2 POAG locus'},
-                          {   'rsid': 'rs11656696',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs11656696',
                               'chrom': 'chr1',
                               'pos': 171625297,
                               'gene': 'GAS7',

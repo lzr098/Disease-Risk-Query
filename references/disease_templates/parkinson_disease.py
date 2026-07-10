@@ -2299,7 +2299,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
     },
     'prs_variants_high': [],
     'prs_variants': [],
-    'gwas_lead_snps': [   {   'rsid': 'rs76763715',
+    'gwas_lead_snps': [   {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs76763715',
                               'chrom': 'chr1',
                               'pos': 155235843,
                               'beta': -0.7662,
@@ -2311,7 +2312,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.45,
                               'confidence': 'high',
                               'note': 'GBA1 风险/保护性变异'},
-                          {   'rsid': 'rs35777901',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs35777901',
                               'chrom': 'chr1',
                               'pos': 155467920,
                               'beta': 0.6174,
@@ -2323,7 +2325,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.45,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.6174'},
-                          {   'rsid': 'rs35749011',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs35749011',
                               'chrom': 'chr1',
                               'pos': 155162560,
                               'beta': 0.6077,
@@ -2335,7 +2338,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.45,
                               'confidence': 'high',
                               'note': 'GBA1 N370S，葡糖脑苷脂酶风险变异'},
-                          {   'rsid': 'rs9889297',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs9889297',
                               'chrom': 'chr17',
                               'pos': 46610330,
                               'beta': -0.5875,
@@ -2347,7 +2351,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.45,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.5875'},
-                          {   'rsid': 'rs35603727',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs35603727',
                               'chrom': 'chr1',
                               'pos': 156038197,
                               'beta': 0.4801,
@@ -2359,7 +2364,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.38,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.4801'},
-                          {   'rsid': 'rs187465649',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs187465649',
                               'chrom': 'chr1',
                               'pos': 1251453,
                               'beta': -0.4394,
@@ -2371,7 +2377,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.38,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.4394'},
-                          {   'rsid': 'rs117896735',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs117896735',
                               'chrom': 'chr10',
                               'pos': 119776815,
                               'beta': 0.4279,
@@ -2383,7 +2390,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.38,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.4279'},
-                          {   'rsid': 'rs144296031',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs144296031',
                               'chrom': 'chr12',
                               'pos': 40608183,
                               'beta': -0.3918,
@@ -2395,7 +2403,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.3918'},
-                          {   'rsid': 'rs148906682',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs148906682',
                               'chrom': 'chr10',
                               'pos': 119501274,
                               'beta': -0.3907,
@@ -2407,7 +2416,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.3907'},
-                          {   'rsid': 'rs145447536',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs145447536',
                               'chrom': 'chr17',
                               'pos': 45780083,
                               'beta': -0.3906,
@@ -2419,7 +2429,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.3906'},
-                          {   'rsid': 'rs140722239',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs140722239',
                               'chrom': 'chr12',
                               'pos': 39994307,
                               'beta': 0.3875,
@@ -2431,7 +2442,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.3875'},
-                          {   'rsid': 'rs114797774',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs114797774',
                               'chrom': 'chr1',
                               'pos': 161498640,
                               'beta': 0.3862,
@@ -2443,7 +2455,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.3862'},
-                          {   'rsid': 'rs118150865',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs118150865',
                               'chrom': 'chr10',
                               'pos': 100296977,
                               'beta': 0.3817,
@@ -2455,7 +2468,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.3817'},
-                          {   'rsid': 'rs113997642',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs113997642',
                               'chrom': 'chr4',
                               'pos': 89889189,
                               'beta': 0.3754,
@@ -2467,7 +2481,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.3754'},
-                          {   'rsid': 'rs148838804',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs148838804',
                               'chrom': 'chr3',
                               'pos': 46936660,
                               'beta': -0.3733,
@@ -2479,7 +2494,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.3733'},
-                          {   'rsid': 'rs17016889',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs17016889',
                               'chrom': 'chr4',
                               'pos': 90357394,
                               'beta': 0.3511,
@@ -2491,7 +2507,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.3511'},
-                          {   'rsid': 'rs35161831',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs35161831',
                               'chrom': 'chr1',
                               'pos': 156330940,
                               'beta': -0.3505,
@@ -2503,7 +2520,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.32,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.3505'},
-                          {   'rsid': 'rs187205660',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs187205660',
                               'chrom': 'chr1',
                               'pos': 120013081,
                               'beta': 0.3455,
@@ -2515,7 +2533,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.3455'},
-                          {   'rsid': 'rs112893917',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs112893917',
                               'chrom': 'chr11',
                               'pos': 57783447,
                               'beta': 0.345,
@@ -2527,7 +2546,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.345'},
-                          {   'rsid': 'rs149094961',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs149094961',
                               'chrom': 'chr4',
                               'pos': 90111896,
                               'beta': 0.3361,
@@ -2539,7 +2559,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.3361'},
-                          {   'rsid': 'rs10516845',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs10516845',
                               'chrom': 'chr4',
                               'pos': 89763127,
                               'beta': -0.3359,
@@ -2551,7 +2572,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'SNCA 3UTR; EAS AF=0.45 vs EUR=0.90, large EAS divergence'},
-                          {   'rsid': 'rs17795424',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs17795424',
                               'chrom': 'chr4',
                               'pos': 89751992,
                               'beta': 0.3266,
@@ -2563,7 +2585,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'SNCA位点，PD GWAS信号'},
-                          {   'rsid': 'rs200789118',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs200789118',
                               'chrom': 'chr1',
                               'pos': 62210001,
                               'beta': 0.317,
@@ -2575,7 +2598,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.317'},
-                          {   'rsid': 'rs34268490',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs34268490',
                               'chrom': 'chr2',
                               'pos': 168166753,
                               'beta': -0.3143,
@@ -2587,7 +2611,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.3143'},
-                          {   'rsid': 'rs71609574',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs71609574',
                               'chrom': 'chr4',
                               'pos': 89706816,
                               'beta': -0.3132,
@@ -2599,7 +2624,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.3132'},
-                          {   'rsid': 'rs74390872',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs74390872',
                               'chrom': 'chr4',
                               'pos': 89697881,
                               'beta': 0.3044,
@@ -2611,7 +2637,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.3044'},
-                          {   'rsid': 'rs17442143',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs17442143',
                               'chrom': 'chr12',
                               'pos': 40044167,
                               'beta': -0.3026,
@@ -2623,7 +2650,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.25,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.3026'},
-                          {   'rsid': 'rs146092449',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs146092449',
                               'chrom': 'chr17',
                               'pos': 45438809,
                               'beta': -0.2917,
@@ -2635,7 +2663,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.2917'},
-                          {   'rsid': 'rs148371284',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs148371284',
                               'chrom': 'chr10',
                               'pos': 13273397,
                               'beta': 0.2842,
@@ -2647,7 +2676,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.2842'},
-                          {   'rsid': 'rs61754230',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs61754230',
                               'chrom': 'chr12',
                               'pos': 71785666,
                               'beta': 0.2839,
@@ -2659,7 +2689,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.2839'},
-                          {   'rsid': 'rs185418056',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs185418056',
                               'chrom': 'chr1',
                               'pos': 112383292,
                               'beta': -0.283,
@@ -2671,7 +2702,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.283'},
-                          {   'rsid': 'rs72874309',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs72874309',
                               'chrom': 'chr4',
                               'pos': 90046189,
                               'beta': 0.2829,
@@ -2683,7 +2715,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.2829'},
-                          {   'rsid': 'rs7134935',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs7134935',
                               'chrom': 'chr12',
                               'pos': 123439065,
                               'beta': 0.2771,
@@ -2695,7 +2728,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.2771'},
-                          {   'rsid': 'rs356182',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs356182',
                               'chrom': 'chr4',
                               'pos': 89704960,
                               'beta': -0.2764,
@@ -2707,7 +2741,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'SNCA; EAS AF=0.34 vs EUR=0.65, significant divergence'},
-                          {   'rsid': 'rs78491631',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs78491631',
                               'chrom': 'chr11',
                               'pos': 58102747,
                               'beta': 0.2761,
@@ -2719,7 +2754,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=0.2761'},
-                          {   'rsid': 'rs146143531',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs146143531',
                               'chrom': 'chr1',
                               'pos': 155042492,
                               'beta': -0.2741,
@@ -2731,7 +2767,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.2741'},
-                          {   'rsid': 'rs62053943',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs62053943',
                               'chrom': 'chr17',
                               'pos': 45666837,
                               'beta': -0.271,
@@ -2743,7 +2780,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.271'},
-                          {   'rsid': 'rs143068046',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs143068046',
                               'chrom': 'chr1',
                               'pos': 157751743,
                               'beta': -0.2663,
@@ -2755,7 +2793,8 @@ TEMPLATE = {   'aliases': ['parkinson', "parkinson's disease", 'pd', 'familial p
                               'contribution_score': 0.2,
                               'confidence': 'high',
                               'note': 'PGS000903 beta=-0.2663'},
-                          {   'rsid': 'rs192200577',
+                          {
+                              'variant_class': 'gwas_lead',   'rsid': 'rs192200577',
                               'chrom': 'chr1',
                               'pos': 232025751,
                               'beta': 0.2638,
