@@ -148,10 +148,39 @@ def _parse_gt(fmt: str, sample: str, fmt_key: str = "GT") -> str:
     return "./."
 
 
-def _gt_to_dosage(gt: str, effect_allele: Optional[str], ref: str, alt: str) -> int:
+def _is_male_hemizygous_region(sex: Optional[str], chrom: Optional[str], pos: Optional[int]) -> bool:
+    """Return True for chrX/chrY non-PAR regions in males.
+
+    GRCh38 PAR coordinates:
+    - PAR1: chrX/chrY 10,001-2,781,479
+    - PAR2: chrX/chrY 155,701,383-156,030,895
+    """
+    if not sex or sex.lower() != "male":
+        return False
+    if not chrom or pos is None:
+        return False
+    chrom_norm = chrom.lower().replace("chr", "")
+    if chrom_norm not in ("x", "y"):
+        return False
+    if chrom_norm == "x":
+        if (10001 <= pos <= 2781479) or (155701383 <= pos <= 156030895):
+            return False  # PAR regions are diploid even in males
+    return True
+
+
+def _gt_to_dosage(
+    gt: str,
+    effect_allele: Optional[str],
+    ref: str,
+    alt: str,
+    sex: Optional[str] = None,
+    chrom: Optional[str] = None,
+    pos: Optional[int] = None,
+) -> int:
     """Compute dosage of effect_allele from genotype string.
 
     Genotype alleles are VCF numeric indices (0=REF, 1=first ALT, etc.).
+    For male chrX/chrY non-PAR regions, hemizygous genotypes are capped at 1.
     """
     if not gt or gt in ("./.", ".|.", "."):
         return 0
@@ -171,7 +200,10 @@ def _gt_to_dosage(gt: str, effect_allele: Optional[str], ref: str, alt: str) -> 
     else:
         # If no effect allele specified, count ALT copies
         target = "1"
-    return sum(1 for a in indices if a == target)
+    dosage = sum(1 for a in indices if a == target)
+    if _is_male_hemizygous_region(sex, chrom, pos):
+        dosage = min(dosage, 1)
+    return dosage
 
 
 def _normalize_allele(allele: str) -> str:
@@ -181,6 +213,7 @@ def _normalize_allele(allele: str) -> str:
 def _match_record(
     variant: VariantWeight,
     parts: list[str],
+    sex: Optional[str] = None,
 ) -> Optional[KnownVariantGenotype]:
     """Match a VCF record to a VariantWeight and return genotype info."""
     chrom = parts[0]
@@ -211,7 +244,7 @@ def _match_record(
     fmt = parts[8]
     sample = parts[9] if len(parts) > 9 else "."
     gt = _parse_gt(fmt, sample)
-    dosage = _gt_to_dosage(gt, variant.effect_allele, ref, matched_alt)
+    dosage = _gt_to_dosage(gt, variant.effect_allele, ref, matched_alt, sex=sex, chrom=chrom, pos=pos)
 
     return KnownVariantGenotype(
         variant=variant,
@@ -228,7 +261,7 @@ def _match_record(
     )
 
 
-def _infer_ref_ref(variant: VariantWeight) -> KnownVariantGenotype:
+def _infer_ref_ref(variant: VariantWeight, sex: Optional[str] = None) -> KnownVariantGenotype:
     """Return a REF/REF genotype for a variant absent from the VCF.
 
     Dosage is computed from the VariantWeight structure:
@@ -239,6 +272,8 @@ def _infer_ref_ref(variant: VariantWeight) -> KnownVariantGenotype:
     If effect_allele == REF, then 0/0 = 2 copies of the effect allele → dosage=2.
     If effect_allele == ALT, then 0/0 = 0 copies → dosage=0.
     If effect_allele matches neither, dosage=0 (unrecognised allele).
+
+    For male chrX/chrY non-PAR regions, hemizygous 0/0 is capped at 1 copy.
     """
     ref_allele = _normalize_allele(variant.ref)
     alt_allele = _normalize_allele(variant.alt)
@@ -253,6 +288,9 @@ def _infer_ref_ref(variant: VariantWeight) -> KnownVariantGenotype:
         dosage = 0
     else:
         dosage = 0
+
+    if _is_male_hemizygous_region(sex, variant.chrom, variant.pos):
+        dosage = min(dosage, 1)
 
     return KnownVariantGenotype(
         variant=variant,
@@ -272,6 +310,7 @@ def _infer_ref_ref(variant: VariantWeight) -> KnownVariantGenotype:
 def query_known_variants(
     vcf_path: Path,
     variants: list[VariantWeight],
+    sex: Optional[str] = None,
 ) -> list[KnownVariantGenotype]:
     """Query exact positions of known variants, inferring ref/ref for absent ones."""
     if not variants:
@@ -282,8 +321,6 @@ def query_known_variants(
     # Build exact-position BED
     bed_lines: list[str] = []
     for v in variants:
-        chrom = v.chrom.lstrip("chr") if not str(vcf_path).endswith(".vcf") else v.chrom
-        # We keep the chrom as-is; bcftools will match whatever is in the VCF.
         bed_lines.append(f"{v.chrom}\t{v.pos - 1}\t{v.pos}\t{v.vcf_key}")
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".bed", delete=False) as bed:
@@ -316,7 +353,7 @@ def query_known_variants(
         for v in variants:
             dedup_key = f"{v.vcf_key}:{v.variant_class}"
             if v.pos == pos and dedup_key not in found_keys:
-                matched = _match_record(v, parts)
+                matched = _match_record(v, parts, sex=sex)
                 if matched:
                     results.append(matched)
                     found_keys.add(dedup_key)
@@ -324,7 +361,7 @@ def query_known_variants(
     # Infer ref/ref for absent variants
     absent = [v for v in variants if f"{v.vcf_key}:{v.variant_class}" not in found_keys]
     for v in absent:
-        results.append(_infer_ref_ref(v))
+        results.append(_infer_ref_ref(v, sex=sex))
 
     logger.info(
         "Known variant query: %d found, %d inferred ref/ref",
@@ -338,6 +375,7 @@ def query_disease_space(
     profile: DiseaseProfile,
     gene_coords: dict[str, list[tuple[str, int, int, str]]],
     work_dir: Path,
+    sex: Optional[str] = None,
 ) -> dict:
     """Query VCF within the unified disease space and known variants panel.
 
@@ -353,7 +391,7 @@ def query_disease_space(
     disease_space_vcf = work_dir / "disease_space_variants.vcf.gz"
     _bcftools_view_regions(vcf_path, unified_bed, disease_space_vcf)
 
-    known_genotypes = query_known_variants(vcf_path, profile.all_known_variants)
+    known_genotypes = query_known_variants(vcf_path, profile.all_known_variants, sex=sex)
 
     return {
         "unified_bed": unified_bed,

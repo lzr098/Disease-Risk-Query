@@ -279,6 +279,7 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         profile,
         gene_coords,
         work_dir,
+        sex=config.sex,
     )
     filtered_vcf = space_result["disease_space_vcf"]
     known_genotypes = space_result["known_variant_genotypes"]
