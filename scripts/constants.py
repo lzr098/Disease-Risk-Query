@@ -9436,7 +9436,7 @@ DISEASE_NAME_ALIASES: dict[str, str] = {
 
 def resolve_builtin_disease_key(disease_name: str) -> Optional[str]:
     """Map a user-provided disease name to a canonical built-in key, if any."""
-    norm = disease_name.lower().strip()
+    norm = disease_name.lower().strip().replace("_", " ")
     if norm in DISEASE_BUILTIN_REFS:
         return norm
     if norm in DISEASE_NAME_ALIASES:

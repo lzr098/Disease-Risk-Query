@@ -81,8 +81,15 @@ def _ensure_indexed(vcf_path: Path) -> None:
     csi = vcf_path.with_suffix(vcf_path.suffix + ".csi")
     tbi = vcf_path.with_suffix(vcf_path.suffix + ".tbi")
     if csi.exists() or tbi.exists():
-        return
-    logger.info("Indexing %s", vcf_path)
+        # Re-index if the existing index is older than the VCF (stale index)
+        vcf_mtime = vcf_path.stat().st_mtime
+        csi_mtime = csi.stat().st_mtime if csi.exists() else float("inf")
+        tbi_mtime = tbi.stat().st_mtime if tbi.exists() else float("inf")
+        if vcf_mtime <= min(csi_mtime, tbi_mtime):
+            return
+        logger.info("Index for %s is older than VCF; rebuilding index", vcf_path)
+    else:
+        logger.info("Indexing %s", vcf_path)
     subprocess.run(["bcftools", "index", str(vcf_path)], check=True)
 
 
