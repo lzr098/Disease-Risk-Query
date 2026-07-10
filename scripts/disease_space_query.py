@@ -307,14 +307,15 @@ def query_known_variants(
         if len(parts) < 8:
             continue
         pos = int(parts[1])
-        # Find matching VariantWeight
+        # Match ALL VariantWeight entries at this position (not just the first)
+        # so that variants appearing in both gwas_lead_snps and prs_variants_high
+        # are both correctly genotyped.
         for v in variants:
-            if v.pos == pos:
+            if v.pos == pos and v.vcf_key not in found_keys:
                 matched = _match_record(v, parts)
                 if matched:
                     results.append(matched)
                     found_keys.add(v.vcf_key)
-                break
 
     # Infer ref/ref for absent variants
     absent = [v for v in variants if v.vcf_key not in found_keys]
