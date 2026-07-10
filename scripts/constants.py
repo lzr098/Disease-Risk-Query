@@ -9344,6 +9344,11 @@ DISEASE_NAME_ALIASES: dict[str, str] = {
     "黄斑变性": "adult vision disorders",
     "青光眼": "adult vision disorders",
     "高度近视": "adult vision disorders",
+    "雄激素性脱发": "androgenetic alopecia",
+    "男性型脱发": "androgenetic alopecia",
+    "脂溢性脱发": "androgenetic alopecia",
+    "脱发": "androgenetic alopecia",
+    "aga": "androgenetic alopecia",
     # English aliases
     "alzheimers": "alzheimer disease",
     "alzheimer's disease": "alzheimer disease",
