@@ -128,7 +128,7 @@ COMPLEX_LIT_GENE_BONUS = 3             # gene-level literature support
 # If fewer than this fraction of disease GWAS anchor SNPs are present in the VCF,
 # assume common variants have been hard-filtered and downweight the GWAS dimension.
 VCF_COMMON_SNP_PRESENCE_THRESHOLD = 0.50
-VCF_GWAS_DOWNWEIGHT_IF_FILTERED = 0.60   # GWAS dimension effective weight = 60% of normal when filtered
+VCF_GWAS_DOWNWEIGHT_IF_FILTERED = 0.85   # GWAS dimension effective weight = 85% of normal when filtered
 
 # Disease mode defaults
 DISEASE_MODE_MENDELIAN = "mendelian"

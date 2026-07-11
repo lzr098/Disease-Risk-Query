@@ -249,6 +249,11 @@ class ContributionResult:
         "variants": [],
     })
     regulatory: list[dict] = field(default_factory=list)
+    prs_high: dict = field(default_factory=lambda: {
+        "score": 0.0,
+        "variant_count": 0,
+        "variants": [],
+    })
     clinvar_enriched: list[dict] = field(default_factory=list)
     overall_level: str = "uncertain"
     overall_score: Optional[float] = None
@@ -263,6 +268,7 @@ class ContributionResult:
             "dosage_risk": self.dosage_risk,
             "gwas_prs": self.gwas_prs,
             "regulatory": self.regulatory,
+            "prs_high": self.prs_high,
             "clinvar_enriched": self.clinvar_enriched,
             "overall_level": self.overall_level,
             "overall_score": self.overall_score,
@@ -564,37 +570,74 @@ def _score_prs_high(
     profile: DiseaseProfile,
     known_genotypes: list[KnownVariantGenotype],
     vcf_qc: dict,
-) -> float:
+) -> dict:
     """High-confidence PRS variants with published weights.
-    
+
     These are PRS variants from validated polygenic risk scores with
-    independently replicated weights. Scored as beta x dosage x CS
-    (no sqrt amplification, as these have verified effect sizes).
+    independently replicated weights. We use sqrt(|beta|) amplification
+    (same as gwas_prs) so that high-confidence small-effect variants still
+    contribute meaningfully to the overall score, and return per-variant
+    details for reporting.
     """
     variants = [
         kg for kg in known_genotypes
         if kg.variant.variant_class == "prs_high"
     ]
     if not variants:
-        return 0.0
+        return {"score": 0.0, "variant_count": 0, "variants": []}
 
     total = 0.0
+    details = []
     for kg in variants:
         v = kg.variant
         beta = v.beta or (math.log(v.or_value) if v.or_value else 0.0)
+        # Use sqrt amplification to be consistent with gwas_prs; these are
+        # well-replicated small-effect variants and should not be damped by
+        # the raw beta linear scale.
+        effective_beta = math.sqrt(abs(beta)) * (1 if beta >= 0 else -1)
         weight = v.contribution_score
-        contribution = beta * kg.dosage * weight
+        contribution = effective_beta * kg.dosage * weight
         total += contribution
 
-    # Normalise by sqrt(n)
-    n = max(len(variants), 1)
-    total = total / math.sqrt(n)
+        vcf_ref = kg.ref
+        vcf_alt = kg.alt
+        vcf_variant = f"{kg.chrom}:{kg.pos}:{vcf_ref}:{vcf_alt}"
+        template_swap = (vcf_ref != v.ref or vcf_alt != v.alt) and not kg.inferred_ref_ref
 
-    # Apply VCF filter penalty
+        details.append({
+            "rsid": v.rsid,
+            "gene": v.gene,
+            "variant": vcf_variant,
+            "template_variant": v.vcf_key if template_swap else None,
+            "template_swap": template_swap,
+            "gt": kg.gt,
+            "effect_allele": v.effect_allele,
+            "dosage": kg.dosage,
+            "beta": beta,
+            "beta_effective": round(effective_beta, 4),
+            "weight": weight,
+            "contribution": round(contribution, 4),
+            "inferred_ref_ref": kg.inferred_ref_ref,
+            "note": v.note,
+        })
+
+    # Normalise by sqrt(n) for cross-disease comparability
+    n = len(variants)
+    total_normalised = total / math.sqrt(n)
+
+    # Apply VCF filter penalty (lighter than gwas_prs because these are
+    # high-confidence PRS variants whose weights have been independently
+    # replicated).
     if vcf_qc.get("likely_filtered"):
-        total *= 0.6  # PRS SNPs often common, may be filtered
-    
-    return abs(total)
+        total_normalised *= VCF_GWAS_DOWNWEIGHT_IF_FILTERED
+
+    return {
+        "score": round(total_normalised, 4),
+        "score_raw": round(total, 4),
+        "sqrt_n": round(math.sqrt(n), 1),
+        "variant_count": n,
+        "variants": details,
+    }
 
 
 def _score_regulatory(
@@ -724,7 +767,7 @@ def score(
     result.clinvar_enriched = _collect_clinvar_enriched(tiered_variants)
 
     # High-confidence PRS layer
-    prs_high_score = _score_prs_high(profile, known_genotypes, vcf_qc)
+    result.prs_high = _score_prs_high(profile, known_genotypes, vcf_qc)
 
     # Combine into overall score using model weights
     model = profile.contribution_model or {}
@@ -734,6 +777,7 @@ def score(
     dosage_score = sum(x["contribution"] for x in result.dosage_risk)
     gwas_score = abs(result.gwas_prs.get("score", 0.0))
     reg_score = sum(x["contribution"] for x in result.regulatory)
+    prs_high_score = abs(result.prs_high.get("score", 0.0))
 
     weights = {
         "mendelian_high": model.get("mendelian_high", {}).get("weight", 1.0),
@@ -778,7 +822,7 @@ def score(
         {"layer": "known_pathogenic", "count": len(result.known_pathogenic), "score": round(known_score, 3)},
         {"layer": "dosage_risk", "count": len(result.dosage_risk), "score": round(dosage_score, 3)},
         {"layer": "gwas_prs", "count": result.gwas_prs["variant_count"], "score": round(gwas_score, 3)},
-        {"layer": "prs_high", "count": len([kg for kg in known_genotypes if kg.variant.variant_class == "prs_high"]), "score": round(prs_high_score, 3)},
+        {"layer": "prs_high", "count": result.prs_high["variant_count"], "score": round(prs_high_score, 3)},
         {"layer": "regulatory", "count": len(result.regulatory), "score": round(reg_score, 3)},
         {"layer": "clinvar_enriched", "count": len(result.clinvar_enriched), "score": 0.0},
     ]

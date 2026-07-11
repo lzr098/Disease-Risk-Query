@@ -149,7 +149,7 @@ def _render_layer_table(layer: str, items: list[dict], gene_context: dict[str, s
         return lines
     ctx = gene_context or {}
 
-    if layer == "gwas_prs":
+    if layer == "gwas_prs" or layer == "prs_high":
         lines.append("| SNP | 基因 | 位点 | 基因型 | 来源 | 风险等位 | 剂量 | OR | beta | 贡献 | 说明 |")
         lines.append("|-----|------|------|--------|------|----------|------|----|----|------|------|")
         for d in items:
@@ -454,7 +454,7 @@ def generate_report(
 
     layer_order = [
         "mendelian_high", "mendelian_mod", "known_pathogenic",
-        "dosage_risk", "gwas_prs", "regulatory",
+        "dosage_risk", "gwas_prs", "prs_high", "regulatory",
     ]
     raw_layer_items = {
         "mendelian_high": contribution.get("mendelian_high", []),
@@ -462,6 +462,7 @@ def generate_report(
         "known_pathogenic": contribution.get("known_pathogenic", []),
         "dosage_risk": contribution.get("dosage_risk", []),
         "gwas_prs": contribution.get("gwas_prs", {}).get("variants", []),
+        "prs_high": contribution.get("prs_high", {}).get("variants", []),
         "regulatory": contribution.get("regulatory", []),
     }
     # For GWAS/PRS, suppress all-ref/ref zero-contribution noise in the table,
@@ -488,6 +489,7 @@ def generate_report(
         "known_pathogenic": sum(x.get("contribution", 0) for x in raw_layer_items["known_pathogenic"]),
         "dosage_risk": sum(x.get("contribution", 0) for x in raw_layer_items["dosage_risk"]),
         "gwas_prs": abs(contribution.get("gwas_prs", {}).get("score", 0.0)),
+        "prs_high": abs(contribution.get("prs_high", {}).get("score", 0.0)),
         "regulatory": sum(x.get("contribution", 0) for x in raw_layer_items["regulatory"]),
     }
 
@@ -521,9 +523,14 @@ def generate_report(
         lines.append(f"- **层级等级**：{level}（{LEVEL_MEANING.get(level, level)}）")
         lines.append(f"- **真实检出**：{real_count} 个 | **推断 ref/ref**：{inferred_count} 个")
         lines.append("")
-        if layer in ("gwas_prs", "dosage_risk") and not items and raw_items:
+        if layer in ("gwas_prs", "dosage_risk", "prs_high") and not items and raw_items:
             # All known risk variants are ref/ref with zero contribution; show compact summary
-            label_short = "GWAS/PRS" if layer == "gwas_prs" else "剂量风险"
+            if layer == "gwas_prs":
+                label_short = "GWAS/PRS"
+            elif layer == "prs_high":
+                label_short = "高置信 PRS"
+            else:
+                label_short = "剂量风险"
             lines.append(
                 f"_该疾病共定义 {len(raw_items)} 个 {label_short} 位点，"
                 f"本次样本中 {inferred_count} 个未真实检出（已推断为 ref/ref），"
