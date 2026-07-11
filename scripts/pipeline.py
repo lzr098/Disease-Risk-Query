@@ -36,6 +36,26 @@ from vcf_filter import build_gene_coordinates_cache, check_vcf_completeness, det
 logger = logging.getLogger(__name__)
 
 
+def _clean_work_dir_residuals(work_dir: Path) -> None:
+    """Remove artifacts from interrupted previous runs that could poison results.
+
+    Broken symlinks, stale VCF indexes, and partially written intermediate
+    files are deleted. Existing result.json and .pipeline_marker are also
+    removed because each work_dir is timestamped and should represent a single
+    coherent run.
+    """
+    for item in work_dir.iterdir():
+        if item.is_symlink() and not item.exists():
+            logger.debug("Removing broken symlink: %s", item)
+            item.unlink(missing_ok=True)
+        elif item.is_file() and item.name in {"normalized.vcf.gz", "disease_space_variants.vcf.gz", "result.json", ".pipeline_marker", ".ref_validation_marker"}:
+            logger.debug("Removing stale file: %s", item)
+            item.unlink(missing_ok=True)
+        elif item.is_file() and item.suffix in {".csi", ".tbi"}:
+            logger.debug("Removing stale index: %s", item)
+            item.unlink(missing_ok=True)
+
+
 @dataclass
 class PipelineConfig:
     input_vcf: Path
@@ -70,9 +90,35 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     disease_mode = resolve_disease_mode(config.disease_query, config.disease_mode)
     logger.info("Disease mode resolved to: %s", disease_mode)
 
-    run_id = f"drq_{config.disease_query.replace(' ', '_').replace('/', '_')[:30]}"
+    disease_slug = config.disease_query.replace(' ', '_').replace('/', '_')[:30]
+    run_id = f"drq_{disease_slug}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     work_dir = output_dir / run_id
     work_dir.mkdir(parents=True, exist_ok=True)
+
+    # Maintain a stable "latest" symlink for the disease so downstream tools
+    # and users can always find the most recent run without guessing timestamps.
+    # Use a distinct name (_latest) to avoid colliding with legacy directories.
+    latest_link = output_dir / f"drq_{disease_slug}_latest"
+    if latest_link.exists() or latest_link.is_symlink():
+        try:
+            if latest_link.is_dir() and not latest_link.is_symlink():
+                # Remove a stale directory that happened to have the same name.
+                # This is safe because we just created a fresh timestamped work_dir
+                # and the _latest directory should never contain irreplaceable data.
+                shutil.rmtree(latest_link)
+            else:
+                latest_link.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("Could not remove stale latest link/dir %s: %s", latest_link, exc)
+    try:
+        latest_link.symlink_to(work_dir.resolve(), target_is_directory=True)
+    except OSError as exc:
+        logger.warning("Could not create latest symlink %s: %s", latest_link, exc)
+
+    # Defensive cleanup: previous interrupted runs may have left broken
+    # symlinks, stale indexes, or partially written VEP files. Remove them
+    # now so they cannot poison the current run.
+    _clean_work_dir_residuals(work_dir)
 
     # --- Global pipeline checkpoint ---
     result_json = work_dir / "result.json"
@@ -85,16 +131,21 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
                     and stored.get("input_size") == input_stat.st_size
                     and stored.get("disease") == config.disease_query
                     and stored.get("offline") == config.offline
-                    and stored.get("spliceai") == config.spliceai):
-                logger.info("Pipeline checkpoint hit — returning cached %s", result_json)
+                    and stored.get("spliceai") == config.spliceai
+                    and stored.get("sex") == config.sex
+                    and stored.get("age") == config.age
+                    and stored.get("two_phase") == config.two_phase
+                    and stored.get("max_genes") == config.max_genes
+                    and stored.get("tissue") == config.tissue):
+                logger.info("Pipeline checkpoint hit - returning cached %s", result_json)
                 cached = json.loads(result_json.read_text())
                 cached["_from_checkpoint"] = True
                 return cached
             else:
-                logger.info("Pipeline checkpoint stale — re-running")
+                logger.info("Pipeline checkpoint stale - re-running")
                 marker.unlink(missing_ok=True)
         except Exception as exc:
-            logger.warning("Pipeline checkpoint read failed: %s — re-running", exc)
+            logger.warning("Pipeline checkpoint read failed: %s - re-running", exc)
             marker.unlink(missing_ok=True)
 
     # Step 0: VCF genotyping status detection
@@ -125,7 +176,7 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     if not is_genotyped:
         logger.warning(
             "⚠️ VCF appears NOT genotyped: %s. "
-            "Score interpretation may be unreliable — "
+            "Score interpretation may be unreliable - "
             "missing positions may be data gaps, not REF/REF.",
             genotyping_info.get("note", ""),
         )
@@ -147,7 +198,7 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         logger.info("Liftover result: %s", lo_result)
         build = "GRCh38"
     else:
-        # Use symlink instead of full copy — the normalized VCF is read-only downstream
+        # Use symlink instead of full copy - the normalized VCF is read-only downstream
         if normalized_vcf.exists() or normalized_vcf.is_symlink():
             normalized_vcf.unlink(missing_ok=True)
         normalized_vcf.symlink_to(config.input_vcf.resolve())
@@ -158,7 +209,7 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
                 dest_idx.unlink(missing_ok=True)
             dest_idx.symlink_to(idx.resolve())
 
-    # REF validation — with sub-checkpoint (skip if VCF unchanged from last validation)
+    # REF validation - with sub-checkpoint (skip if VCF unchanged from last validation)
     if GRCH38_FASTA.exists() and build == "GRCh38":
         logger.info("Step 1b: Validating REF alleles against GRCh38 FASTA")
         ref_marker = normalized_vcf.parent / ".ref_validation_marker"
@@ -167,7 +218,7 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
             if ref_marker.exists():
                 parts = ref_marker.read_text().strip().split()
                 if len(parts) >= 2 and int(parts[0]) == st.st_mtime and int(parts[1]) == st.st_size:
-                    logger.info("REF validation checkpoint hit — skipping (VCF unchanged)")
+                    logger.info("REF validation checkpoint hit - skipping (VCF unchanged)")
                     validation = {"pass": True, "note": "cached, VCF unchanged"}
                 else:
                     raise ValueError("stale marker")
@@ -220,8 +271,8 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         disease_ref["metadata"]["counts"]["literature_entries"] = len(profile.key_literature or [])
 
     if not profile.gene_set:
-        # No genes found; produce empty report
-        report_path = work_dir / f"{config.disease_query.replace(' ', '_')}-{datetime.now().strftime('%Y%m%d')}-report.md"
+        # No genes found; produce empty report with a timestamped filename.
+        report_path = work_dir / f"{config.disease_query.replace(' ', '_')}-{datetime.now().strftime('%Y%m%d_%H%M%S')}-report.md"
         empty_gpa = {
             "tier1_variants": [],
             "tier2_variants": [],
@@ -481,8 +532,9 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
         "entries": literature_entries,
     }
 
-    # Generate report
-    report_path = work_dir / f"{config.disease_query.replace(' ', '_')}-{datetime.now().strftime('%Y%m%d')}-report.md"
+    # Generate report with a timestamped filename so repeated runs on the same
+    # day do not overwrite each other.
+    report_path = work_dir / f"{config.disease_query.replace(' ', '_')}-{datetime.now().strftime('%Y%m%d_%H%M%S')}-report.md"
     legacy_gwas_lead_snps = _known_genotypes_to_legacy_gwas(known_genotypes)
 
     # Build disease space stats for report
@@ -569,6 +621,11 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
                     "disease": config.disease_query,
                     "offline": config.offline,
                     "spliceai": config.spliceai,
+                    "sex": config.sex,
+                    "age": config.age,
+                    "two_phase": config.two_phase,
+                    "max_genes": config.max_genes,
+                    "tissue": config.tissue,
                 }
             )
         )
