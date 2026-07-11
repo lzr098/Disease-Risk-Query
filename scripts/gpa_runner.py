@@ -44,6 +44,7 @@ def _base_name(vcf: Path) -> str:
 def _run_gpa_subprocess(
     annotated_vcf: Path,
     disease_name: str,
+    disease_description: Optional[str],
     tissue: str,
     sex: str,
     age: Optional[int],
@@ -71,6 +72,7 @@ def _run_gpa_subprocess(
         "--input-file", str(annotated_vcf),
         "--tissue", tissue,
         "--phenotypes", disease_name,
+        "--disease-description", disease_description or disease_name,
         "--format", "vcf",
         "--output-json", str(output_json),
     ]
@@ -121,6 +123,7 @@ def _run_gpa_subprocess(
 def run_gpa_on_filtered_vcf(
     filtered_vcf: Path,
     disease_name: str,
+    disease_description: Optional[str] = None,
     tissue: Optional[str] = None,
     sex: str = "unknown",
     age: Optional[int] = None,
@@ -149,6 +152,7 @@ def run_gpa_on_filtered_vcf(
     gpa_result = _run_gpa_subprocess(
         annotated_vcf=annotated_vcf,
         disease_name=disease_name,
+        disease_description=disease_description,
         tissue=tissue,
         sex=sex,
         age=age,

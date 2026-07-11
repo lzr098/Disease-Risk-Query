@@ -60,6 +60,7 @@ def _clean_work_dir_residuals(work_dir: Path) -> None:
 class PipelineConfig:
     input_vcf: Path
     disease_query: str
+    disease_description: Optional[str] = None
     hpo_id: Optional[str] = None
     sex: str = "unknown"
     age: Optional[int] = None
@@ -373,6 +374,7 @@ def run_disease_risk_pipeline(config: PipelineConfig) -> dict:
     gpa_result = run_gpa_on_filtered_vcf(
         filtered_vcf=filtered_vcf,
         disease_name=config.disease_query,
+        disease_description=config.disease_description or config.disease_query,
         tissue=config.tissue,
         sex=config.sex,
         age=config.age,
