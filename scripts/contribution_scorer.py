@@ -68,9 +68,14 @@ def _is_high_impact(v: dict) -> bool:
     return False
 
 
-def _is_likely_benign_clinvar(v: dict) -> bool:
+def _is_confident_pathogenic(v: dict) -> bool:
+    """Return True if ClinVar classifies this as pathogenic or likely pathogenic."""
     sig = (v.get("clinvar_sig") or "").lower()
-    return "benign" in sig or "likely_benign" in sig
+    if not sig or sig in ("not_provided", "not_specified", "unknown"):
+        return False
+    if "not" in sig:
+        return False
+    return "pathogenic" in sig
 
 
 def _is_vus_clinvar(v: dict) -> bool:
@@ -83,6 +88,11 @@ def _is_vus_clinvar(v: dict) -> bool:
         # conflicting + benign/likely_benign → treat as VUS-equivalent
         return True
     return False
+
+
+def _is_likely_benign_clinvar(v: dict) -> bool:
+    sig = (v.get("clinvar_sig") or "").lower()
+    return "benign" in sig and "pathogenic" not in sig
 
 
 def _clinvar_vus_factor(v: dict) -> float:
@@ -355,14 +365,24 @@ def _score_mendelian_mod(
             zygosity_factor = 1.5 if gt in ("1/1", "1|1") else 1.0
             contribution *= zygosity_factor
             
-            # ClinGen validity and domain bonus
+            # ClinGen validity and domain context
             clingen_mult = _clingen_weight(gw.clingen_validity, True)
-            domain_mult = _domain_bonus(gene, profile, v)
+            # VUS-like variants in core genes are domain-aware: outside known
+            # functional domains they are downgraded, in-domain variants keep
+            # the established key-domain bonus.
+            domain_factor, domain_reason = _protein_context_factor(v)
+            is_vus_like = not _is_confident_pathogenic(v)
+            if is_vus_like and domain_factor < 1.0:
+                contribution *= domain_factor
+            # Apply key-domain bonus only for in-domain variants or confirmed P/LP
+            domain_mult = 1.15 if (domain_factor >= 1.0 or not is_vus_like) and _is_coding_variant(v) else 1.0
             contribution *= clingen_mult * domain_mult
             
             note_parts = [f"{gw.penetrance} penetrance variant in {gene}"]
             if clingen_mult < 1.0:
                 note_parts.append(f"clingen_validity={gw.clingen_validity or 'missing'} (×{clingen_mult})")
+            if domain_factor < 1.0 and is_vus_like:
+                note_parts.append(domain_reason)
             if domain_mult > 1.0:
                 note_parts.append("coding change in gene with key domains (×1.15)")
             
