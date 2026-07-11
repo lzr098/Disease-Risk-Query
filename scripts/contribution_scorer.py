@@ -385,6 +385,9 @@ def _score_mendelian_mod(
                 note_parts.append(domain_reason)
             if domain_mult > 1.0:
                 note_parts.append("coding change in gene with key domains (×1.15)")
+            if v.get("transcript_ambiguity_flag"):
+                contribution *= 0.5
+                note_parts.append("transcript selection ambiguous / off-target isoform (×0.5)")
             
             results.append({
                 "gene": gene,
