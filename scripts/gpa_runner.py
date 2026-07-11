@@ -143,6 +143,11 @@ def run_gpa_on_filtered_vcf(
     """
     tissue = tissue or infer_tissue(disease_name)
 
+    # Offline mode disables external API calls (SpliceAI, gnomAD REST, etc.)
+    if offline and spliceai:
+        logger.info("Offline mode: disabling SpliceAI external API queries")
+        spliceai = False
+
     # Compatibility shim for VEP 115
     patch_gpa_csq_parser()
     annotated_vcf = filtered_vcf.parent / f"{_base_name(filtered_vcf)}.vep115.vcf.gz"

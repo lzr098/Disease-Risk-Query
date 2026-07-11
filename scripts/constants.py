@@ -64,18 +64,31 @@ DISEASE_TISSUE_MAP = {
     "cardiovascular": [
         "cardiomyopathy", "arrhythmia", "long qt", "brugada", "hypertrophic cardiomyopathy",
         "dilated cardiomyopathy", "congenital heart", "aortic", "marfan", "loeydietz",
-        "vascular", "stroke", "coronary", "myocardial",
+        "vascular", "stroke", "coronary", "myocardial", "cholesterol", "hypercholesterolemia",
     ],
     "renal": [
         "polycystic kidney", "nephrotic syndrome", "nephritis", "renal", "kidney",
-        "alport", "fabry", "nephronophthisis",
+        "alport", "fabry", "nephronophthisis", "uric acid", "gout",
     ],
     "hepatic": [
         "liver", "hepatic", "cirrhosis", "hemochromatosis", "wilson", "alpha-1 antitrypsin",
+        "colon", "colorectal", "rectal", "bowel", "inflammatory bowel", "ibd", "crohn", "colitis",
     ],
     "hematopoietic": [
         "anemia", "thalassemia", "sickle cell", "hemophilia", "leukemia", "lymphoma",
         "myelodysplastic", "bone marrow", "bleeding disorder", "coagulation",
+    ],
+    "endocrine": [
+        "diabetes", "type 1 diabetes", "type 2 diabetes", "mody", "thyroid", "adrenal",
+        "pituitary", "endocrine", "pancreas", "insulin",
+    ],
+    "metabolic": [
+        "hyperuricemia", "gout", "metabolic syndrome", "obesity", "lipid", "cholesterol",
+        "triglyceride", "fatty liver", "inborn error",
+    ],
+    "ophthalmic": [
+        "vision", "eye", "retinal", "macular", "glaucoma", "cataract", "ophthalmic",
+        "retinopathy", "blindness", "leber", "usher",
     ],
 }
 

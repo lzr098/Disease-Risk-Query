@@ -385,7 +385,15 @@ def _score_mendelian_mod(
                 note_parts.append(domain_reason)
             if domain_mult > 1.0:
                 note_parts.append("coding change in gene with key domains (×1.15)")
-            if v.get("transcript_ambiguity_flag"):
+            if v.get("transcript_off_target"):
+                contribution = 0.0
+                note_parts.append(
+                    f"off-target isoform: selected {v.get('primary_transcript', '?')} "
+                    f"is not the disease-tissue dominant transcript "
+                    f"{v.get('tissue_preferred_transcript') or 'unknown'} "
+                    f"({v.get('tissue_preferred_median_tpm', 0):.2f} TPM); contribution set to 0"
+                )
+            elif v.get("transcript_ambiguity_flag"):
                 contribution *= 0.5
                 note_parts.append("transcript selection ambiguous / off-target isoform (×0.5)")
             
