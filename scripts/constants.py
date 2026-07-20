@@ -9444,6 +9444,13 @@ DISEASE_NAME_ALIASES: dict[str, str] = {
     "prostate": "prostate cancer",
     "pca": "prostate cancer",
     "prostatic cancer": "prostate cancer",
+    # Body mass index / obesity
+    "bmi": "body mass index",
+    "obesity": "body mass index",
+    "body mass index": "body mass index",
+    "体重指数": "body mass index",
+    "肥胖": "body mass index",
+    "肥胖倾向": "body mass index",
 }
 
 

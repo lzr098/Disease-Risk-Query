@@ -89,6 +89,13 @@ DISEASE_TO_HPO: dict[str, str] = {
     "cad": "HP:0001658",
     "coronary heart disease": "HP:0001658",
     "chd": "HP:0001658",
+    # Body mass / obesity continuous-trait mapping
+    "body mass index": "HP:0045081",
+    "bmi": "HP:0045081",
+    "obesity": "HP:0001513",
+    "obese": "HP:0001513",
+    "肥胖": "HP:0001513",
+    "肥胖倾向": "HP:0001513",
 }
 
 
