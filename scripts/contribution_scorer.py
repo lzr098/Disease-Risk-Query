@@ -269,6 +269,7 @@ class ContributionResult:
     overall_score: Optional[float] = None
     details: list[dict] = field(default_factory=list)
     layer_levels: dict[str, str] = field(default_factory=dict)
+    sub_disease_scores: dict[str, dict] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -284,6 +285,7 @@ class ContributionResult:
             "overall_score": self.overall_score,
             "details": self.details,
             "layer_levels": self.layer_levels,
+            "sub_disease_scores": self.sub_disease_scores,
         }
 
 
@@ -319,6 +321,7 @@ def _score_mendelian_high(
             "contribution": round(min(contribution, 1.0), 3),
             "note": "; ".join(note_parts),
             "raw": v,
+            "sub_disease": gw.sub_disease if gw else None,
         })
     return results
 
@@ -404,6 +407,7 @@ def _score_mendelian_mod(
                 "contribution": round(min(contribution, 1.0), 3),
                 "note": "; ".join(note_parts),
                 "raw": v,
+                "sub_disease": gw.sub_disease if gw else None,
             })
     return results
 
@@ -448,6 +452,7 @@ def _score_known_pathogenic(
                 "inferred_ref_ref": True,
                 "confidence": v.confidence,
                 "note": v.note or "",
+                "sub_disease": v.sub_disease,
             })
             continue
         gene_w = gene_map.get(v.gene)
@@ -492,6 +497,7 @@ def _score_known_pathogenic(
             "inferred_ref_ref": kg.inferred_ref_ref,
             "confidence": v.confidence,
             "note": v.note or "",
+            "sub_disease": v.sub_disease,
         })
     return results
 
@@ -733,6 +739,156 @@ def _collect_clinvar_enriched(
     return results
 
 
+def _infer_sub_disease(item: dict, profile: DiseaseProfile) -> Optional[str]:
+    """Infer sub-disease label from a scored item.
+
+    Tries, in order:
+      1. item['sub_disease'] if already populated
+      2. gene → profile.gene_set sub_disease annotation
+      3. rsid / variant → profile.variant_map sub_disease annotation
+    """
+    sd = item.get("sub_disease")
+    if sd:
+        return sd
+
+    # Gene-based lookup (for tiered variants and known variants with gene)
+    gene = item.get("gene") or _variant_gene(item.get("raw", {}))
+    if gene:
+        for g in profile.gene_set:
+            if g.gene == gene and g.sub_disease:
+                return g.sub_disease
+
+    # Variant-based lookup
+    rsid = item.get("rsid")
+    variant = item.get("variant")
+    vm = profile.variant_map
+    if rsid and rsid in vm and vm[rsid].sub_disease:
+        return vm[rsid].sub_disease
+    if variant and variant in vm and vm[variant].sub_disease:
+        return vm[variant].sub_disease
+
+    return None
+
+
+def _compute_sub_disease_scores(
+    profile: DiseaseProfile,
+    result: ContributionResult,
+    model: dict,
+) -> dict[str, dict]:
+    """Compute per-sub-disease scores when a composite template tags genes/SNPs.
+
+    The overall score is a weighted sum of per-layer scores. For sub-disease
+    scores we group the per-variant contributions by sub_disease, then apply the
+    same layer weights. GWAS/PRS layers are re-normalised by sqrt(n_sub)
+    because the overall score uses sqrt(n_total) normalisation.
+    """
+    sub_diseases: set[str] = set()
+    for g in profile.gene_set:
+        if g.sub_disease:
+            sub_diseases.add(g.sub_disease)
+    for v in profile.all_known_variants:
+        if v.sub_disease:
+            sub_diseases.add(v.sub_disease)
+    if not sub_diseases:
+        return {}
+
+    weights = {
+        "mendelian_high": model.get("mendelian_high", {}).get("weight", 1.0),
+        "mendelian_mod": model.get("mendelian_mod", {}).get("weight", 0.8),
+        "known_pathogenic": model.get("known_pathogenic", {}).get("weight", 0.9),
+        "prs_high": model.get("prs_high", {}).get("weight", 0.9),
+        "dosage_risk": model.get("dosage_risk", {}).get("weight", 0.5),
+        "gwas_prs": model.get("gwas_prs", {}).get("weight", 0.3),
+        "regulatory": model.get("regulatory", {}).get("weight", 0.1),
+    }
+
+    scores: dict[str, dict] = {}
+    for sd in sub_diseases:
+        scores[sd] = {
+            "mendelian_high": 0.0,
+            "mendelian_mod": 0.0,
+            "known_pathogenic": 0.0,
+            "dosage_risk": 0.0,
+            "gwas_prs_raw": 0.0,
+            "gwas_prs_count": 0,
+            "prs_high_raw": 0.0,
+            "prs_high_count": 0,
+            "regulatory": 0.0,
+        }
+
+    # Mendelian and known/dosage/regulatory layers: sum contributions directly
+    for layer, key in (
+        ("mendelian_high", "mendelian_high"),
+        ("mendelian_mod", "mendelian_mod"),
+        ("known_pathogenic", "known_pathogenic"),
+        ("dosage_risk", "dosage_risk"),
+        ("regulatory", "regulatory"),
+    ):
+        items = getattr(result, key, [])
+        if isinstance(items, dict):
+            items = items.get("variants", [])
+        for item in items:
+            sd = _infer_sub_disease(item, profile)
+            if sd:
+                scores[sd][layer] += item.get("contribution", 0.0)
+
+    # GWAS/PRS layers: sum raw contributions and counts, then re-normalise
+    for gwas_item in result.gwas_prs.get("variants", []):
+        sd = _infer_sub_disease(gwas_item, profile)
+        if sd:
+            scores[sd]["gwas_prs_raw"] += gwas_item.get("contribution", 0.0)
+            scores[sd]["gwas_prs_count"] += 1
+    for prs_item in result.prs_high.get("variants", []):
+        sd = _infer_sub_disease(prs_item, profile)
+        if sd:
+            scores[sd]["prs_high_raw"] += prs_item.get("contribution", 0.0)
+            scores[sd]["prs_high_count"] += 1
+
+    output: dict[str, dict] = {}
+    for sd, layer_scores in scores.items():
+        gwas_score = max(
+            0.0,
+            (
+                layer_scores["gwas_prs_raw"] / math.sqrt(layer_scores["gwas_prs_count"])
+                if layer_scores["gwas_prs_count"] > 0
+                else 0.0
+            ),
+        )
+        prs_high_score = max(
+            0.0,
+            (
+                layer_scores["prs_high_raw"] / math.sqrt(layer_scores["prs_high_count"])
+                if layer_scores["prs_high_count"] > 0
+                else 0.0
+            ),
+        )
+        overall = (
+            min(layer_scores["mendelian_high"], 1.0) * weights["mendelian_high"]
+            + min(layer_scores["mendelian_mod"], 1.0) * weights["mendelian_mod"]
+            + min(layer_scores["known_pathogenic"], 1.0) * weights["known_pathogenic"]
+            + min(layer_scores["dosage_risk"], 1.0) * weights["dosage_risk"]
+            + min(gwas_score, 1.0) * weights["gwas_prs"]
+            + min(prs_high_score, 1.0) * weights["prs_high"]
+            + min(layer_scores["regulatory"], 1.0) * weights["regulatory"]
+        )
+        if layer_scores["mendelian_high"] > 0:
+            overall = max(overall, 0.8)
+        output[sd] = {
+            "overall_score": round(overall, 3),
+            "overall_level": _overall_level(overall, profile),
+            "mendelian_high": round(layer_scores["mendelian_high"], 3),
+            "mendelian_mod": round(layer_scores["mendelian_mod"], 3),
+            "known_pathogenic": round(layer_scores["known_pathogenic"], 3),
+            "dosage_risk": round(layer_scores["dosage_risk"], 3),
+            "gwas_prs": round(gwas_score, 3),
+            "gwas_prs_count": layer_scores["gwas_prs_count"],
+            "prs_high": round(prs_high_score, 3),
+            "prs_high_count": layer_scores["prs_high_count"],
+            "regulatory": round(layer_scores["regulatory"], 3),
+        }
+    return output
+
+
 def _layer_level(score: float, layer: str, profile: DiseaseProfile) -> str:
     """Return a per-layer qualitative level."""
     if score <= 0.0:
@@ -857,5 +1013,8 @@ def score(
         {"layer": "regulatory", "count": len(result.regulatory), "score": round(reg_score, 3)},
         {"layer": "clinvar_enriched", "count": len(result.clinvar_enriched), "score": 0.0},
     ]
+
+    # Compute per-sub-disease scores for composite templates
+    result.sub_disease_scores = _compute_sub_disease_scores(profile, result, model)
 
     return result

@@ -31,6 +31,7 @@ class GeneWeight:
     phenotype_assoc: str = ""  # Gene-disease phenotype association from MyGene/OMIM
     key_domains: str = ""  # Key protein domains from MyGene InterPro / UniProt
     clingen_validity: str = ""  # ClinGen validity: Definitive / Strong / Moderate / Limited / Disputed / Refuted
+    sub_disease: Optional[str] = None  # Optional sub-disease label for composite templates
     is_mendelian: bool = False  # True if tier is mendelian_high or mendelian_mod
 
     def __post_init__(self):
@@ -71,6 +72,7 @@ class VariantWeight:
     contribution_score: float = 0.0
     confidence: str = "moderate"
     note: str = ""
+    sub_disease: Optional[str] = None  # Optional sub-disease label for composite templates
 
     def __post_init__(self):
         # Infer ref/alt from effect/other alleles if missing
@@ -237,6 +239,32 @@ class DiseaseProfile:
             key = v.rsid or v.vcf_key
             result[key] = v.contribution_score
         return result
+
+    @property
+    def variant_map(self) -> dict[str, VariantWeight]:
+        """Map rsid and vcf_key to VariantWeight for quick lookup."""
+        result: dict[str, VariantWeight] = {}
+        for v in self.all_known_variants:
+            if v.rsid:
+                result[v.rsid] = v
+            result[v.vcf_key] = v
+        return result
+
+    def gene_sub_disease(self, gene: str) -> Optional[str]:
+        """Return sub_disease label for a gene if annotated."""
+        for g in self.gene_set:
+            if g.gene == gene:
+                return g.sub_disease
+        return None
+
+    def variant_sub_disease(self, rsid: Optional[str] = None, vcf_key: Optional[str] = None) -> Optional[str]:
+        """Return sub_disease label for a variant if annotated."""
+        vm = self.variant_map
+        if rsid and rsid in vm:
+            return vm[rsid].sub_disease
+        if vcf_key and vcf_key in vm:
+            return vm[vcf_key].sub_disease
+        return None
 
     def to_dict(self) -> dict[str, Any]:
         return {

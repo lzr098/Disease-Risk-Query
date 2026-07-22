@@ -184,6 +184,53 @@ def _render_layer_table(layer: str, items: list[dict], gene_context: dict[str, s
     return lines
 
 
+def _render_psychiatric_disclaimer_and_subdisease(
+    disease_name: str,
+    contribution: dict,
+) -> list[str]:
+    """Render psychiatric disorders-specific disclaimer and per-sub-disease scores.
+
+    Only activates when the contribution result contains sub_disease_scores,
+    which is produced by composite psychiatric disorder templates.
+    """
+    lines: list[str] = []
+    sub_scores = contribution.get("sub_disease_scores", {})
+    if not sub_scores:
+        return lines
+
+    # Medical disclaimer
+    lines.append(
+        "> ⚠️ **重要声明：本报告涉及精神健康状况，仅用于研究参考，不构成临床诊断、"
+        "筛查或治疗建议。精神疾病由遗传、环境、创伤、社会因素共同作用，"
+        "不能仅凭遗传评分判断。本分析不预测自杀、自残或伤害他人风险。"
+        "如有需要，请咨询专业精神卫生人员。**"
+    )
+    lines.append("")
+
+    # Sub-disease score table
+    lines.append("## 亚型综合评估")
+    lines.append("")
+    lines.append("| 亚型 | 总分 | 等级 | 含义 | 高外显 | 中外显 | 已知致病 | 剂量风险 | GWAS/PRS | 高置信 PRS | 调控区 |")
+    lines.append("|------|------|------|------|--------|--------|----------|----------|----------|------------|--------|")
+    for sd, sd_score in sorted(sub_scores.items(), key=lambda x: x[1]["overall_score"], reverse=True):
+        level = sd_score.get("overall_level", "uncertain")
+        meaning = LEVEL_MEANING.get(level, level)
+        lines.append(
+            f"| {sd} | {sd_score.get('overall_score', 0):.3f} | {level} | {meaning} | "
+            f"{sd_score.get('mendelian_high', 0):.3f} | {sd_score.get('mendelian_mod', 0):.3f} | "
+            f"{sd_score.get('known_pathogenic', 0):.3f} | {sd_score.get('dosage_risk', 0):.3f} | "
+            f"{sd_score.get('gwas_prs', 0):.3f} | {sd_score.get('prs_high', 0):.3f} | "
+            f"{sd_score.get('regulatory', 0):.3f} |"
+        )
+    lines.append("")
+    lines.append(
+        "_注：各亚型评分基于该亚型对应的基因与位点子集独立计算，"
+        "因此亚型分简单相加可能高于综合总分；综合总分已考虑全疾病空间的整体贡献。_"
+    )
+    lines.append("")
+    return lines
+
+
 def _executive_summary(
     score_result: dict,
     contribution: dict,
@@ -330,6 +377,9 @@ def generate_report(
     lines.append("## 1. 执行摘要")
     lines.extend(_executive_summary(score_result, contribution, gwas_lead_snps or []))
     lines.append("")
+
+    # Psychiatric disorders composite template: disclaimer + sub-disease scores
+    lines.extend(_render_psychiatric_disclaimer_and_subdisease(disease_name, contribution))
 
     # 2. Query summary
     lines.append("## 2. 查询与样本信息")
