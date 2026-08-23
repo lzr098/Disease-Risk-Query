@@ -32,6 +32,7 @@ class GeneWeight:
     key_domains: str = ""  # Key protein domains from MyGene InterPro / UniProt
     clingen_validity: str = ""  # ClinGen validity: Definitive / Strong / Moderate / Limited / Disputed / Refuted
     sub_disease: Optional[str] = None  # Optional sub-disease label for composite templates
+    inheritance: str = ""  # AD | AR | XL | XLd | XLr | mitochondrial | "" (unknown)
     is_mendelian: bool = False  # True if tier is mendelian_high or mendelian_mod
 
     def __post_init__(self):

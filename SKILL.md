@@ -310,5 +310,38 @@ gpa-disease-risk-query/
     gene_set_builder.py      # 基因集构建（legacy）
     constants.py             # 常量与疾病内置 refs
     gwas_source.py           # GWAS lead SNP 查询
-  references/                # 运行时缓存 + 模板规范
+    backfill_inheritance.py  # 给模板 mendelian 层基因补 inheritance 字段（见下）
+  references/
+    disease_templates/       # 19 个内置疾病模板
+    gene_inheritance.json    # 基因 → 遗传模式数据库（ClinGen + HPO 合并，5176 基因）
   tests/                     # 测试
+```
+
+## 遗传模式（inheritance）字段
+
+每个疾病模板 gene_set 中的基因条目含 `inheritance` 字段，用于按遗传方式解读
+合子状态（AD 杂合即病 / AR 杂合仅携带 / XL 半合子等）。
+
+**取值**：`AD`(常显) | `AR`(常隐) | `XL`(X连锁) | `XLd`(X显) | `XLr`(X隐) |
+`MT`(线粒体) | `YL`(Y连锁) | `SD`(半显性) | `""`(未知/复杂病)。
+多值用逗号连接（如 `"AD,AR"`），表示该基因通过不同疾病对应多种遗传模式。
+
+**数据源**（`references/gene_inheritance.json`，5176 基因，约 285KB）：
+- ClinGen gene-disease validity curations（逐条 curator 评审，含 MOI + 可信度分类）
+- HPO genes_to_phenotype.txt（公开，基因→表型→遗传模式）
+
+**补字段规则**（实现见 `scripts/backfill_inheritance.py` docstring，规则 R1–R6）：
+1. 只补 `mendelian_high` / `mendelian_mod` 层；`gwas`/`strong_gwas` 层不补
+   （复杂病/多基因病无单基因遗传模式）。
+2. **ClinGen 优先**：基因有 ClinGen 可信记录就用 ClinGen 的 MOI，
+   无才用 HPO 兜底。理由：HPO 存在同一疾病被同时标 AD/AR 的噪声。
+3. ClinGen 可信度过滤：排除 Disputed/Refuted/Contested/No Known Disease Relationship，
+   仅保留 Definitive/Strong/Moderate/Limited。
+4. 多值不硬猜主模式，逗号连接保留全貌，下游评分器对多值做保守处理。
+5. 数据库无记录 → 留空（多为复杂病风险基因，本无单基因遗传模式）。
+
+重新生成/更新字段：
+```bash
+python scripts/backfill_inheritance.py --dry-run   # 预览
+python scripts/backfill_inheritance.py             # 写回
+```

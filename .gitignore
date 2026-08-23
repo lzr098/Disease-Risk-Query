@@ -7,6 +7,9 @@ __pycache__/
 references/*.json
 references/offline_data/
 
+# 例外：遗传模式数据库（ClinGen+HPO 合并的权威参考数据，非本地缓存）
+!references/gene_inheritance.json
+
 # Output / test artifacts
 *.vcf.gz
 *.vcf.gz.csi
