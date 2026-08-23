@@ -114,10 +114,10 @@ def detect_genome_build(vcf_path: Path) -> Optional[str]:
                 if not line.startswith("#"):
                     break
                 low = line.lower()
-                if "grch38" in low or "hg38" in low:
+                if "grch38" in low or "hg38" in low or "b38" in low:
                     build = "GRCh38"
                     break
-                if "grch37" in low or "hg19" in low:
+                if "grch37" in low or "hg19" in low or "b37" in low:
                     build = "GRCh37"
                     break
     except Exception as exc:
@@ -134,10 +134,10 @@ def detect_genome_build(vcf_path: Path) -> Optional[str]:
                     if "length=" in line:
                         length_str = line.split("length=")[1].split(",")[0].split(">")[0]
                         length = int(length_str)
-                        if length > 248_900_000:  # GRCh38 chr1 = 248,956,422
-                            build = "GRCh38"
-                        else:
+                        if length > 249_000_000:  # GRCh37 chr1 = 249,250,621
                             build = "GRCh37"
+                        else:  # GRCh38 chr1 = 248,956,422
+                            build = "GRCh38"
                         break
         except Exception as exc:
             logger.warning("Contig length fallback failed: %s", exc)

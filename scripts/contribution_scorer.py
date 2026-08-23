@@ -114,6 +114,42 @@ def _clinvar_vus_factor(v: dict) -> float:
     return 0.5
 
 
+def _af_rarity_factor(v: dict) -> tuple[float, str]:
+    """Return (multiplier, note) for gnomAD AF three-state handling.
+
+    Three-state policy (fixes AF=None being treated as 'rare'):
+      - AF < 0.1%        -> rare, full weight (1.0)
+      - AF 0.1% - 1%     -> low-frequency, mild downweight (0.7)
+      - AF 1% - 5%       -> common, downweight (0.4, NOT skipped)
+      - AF > 5%          -> common polymorphism, heavy downweight (0.15)
+      - AF = None        -> frequency unverified, downweight (0.5)
+    """
+    af = _gnomad_af(v)
+    if af is None:
+        return 0.5, "gnomAD 频率未验证(×0.5)"
+    if af < 0.001:
+        return 1.0, f"罕见 AF={af:.2e}"
+    if af < 0.01:
+        return 0.7, f"低频 AF={af:.3g}"
+    if af < 0.05:
+        return 0.4, f"常见 AF={af:.3g}(降权)"
+    return 0.15, f"高频多态 AF={af:.3g}(大幅降权)"
+
+
+def _clinvar_evidence_level(v: dict) -> str:
+    """Return ClinVar evidence level: 'pathogenic' | 'vus' | 'none'.
+
+    Pathogenic/Likely_pathogenic -> 'pathogenic'
+    VUS / Conflicting -> 'vus'
+    Benign / missing / other -> 'none'
+    """
+    if _is_confident_pathogenic(v):
+        return "pathogenic"
+    if _is_vus_clinvar(v):
+        return "vus"
+    return "none"
+
+
 def _protein_context_factor(v: dict) -> tuple[float, str]:
     """Assess protein structural context from GPA domain_info and VEP/UniProt.
 
@@ -326,14 +362,6 @@ def _score_mendelian_high(
     return results
 
 
-def _is_damaging_or_pathogenic(v: dict) -> bool:
-    """Return True if variant is HIGH/MODERATE impact or ClinVar P/LP."""
-    if _is_high_impact(v):
-        return True
-    sig = (v.get("clinvar_sig") or "").lower()
-    return "pathogenic" in sig
-
-
 def _score_mendelian_mod(
     profile: DiseaseProfile,
     tiered: dict[str, list[dict]],
@@ -349,17 +377,19 @@ def _score_mendelian_mod(
                 continue
             if _is_likely_benign_clinvar(v):
                 continue
-            # For Tier 3, require additional evidence (pathogenic or HIGH impact + rare)
+            # ClinVar evidence gate: only P/LP or VUS missense count toward
+            # moderate-penetrance; variants without ClinVar evidence are excluded
+            # from this layer (they may still surface in the regulatory layer).
+            evidence_level = _clinvar_evidence_level(v)
+            if evidence_level == "none":
+                continue
             tier = 1 if tier_key == "tier1_variants" else (2 if tier_key == "tier2_variants" else 3)
-            if tier == 3:
-                af = _gnomad_af(v)
-                if af is not None and af > 0.01:
-                    continue
-                if not _is_damaging_or_pathogenic(v):
-                    continue
-            af = _gnomad_af(v)
-            rarity_bonus = 1.0 if af is None else max(0.5, 1.0 - af)
-            contribution = gw.contribution_score * gw.penetrance_score * rarity_bonus
+            # AF three-state policy: common variants are downweighted, not skipped.
+            af_factor, af_note = _af_rarity_factor(v)
+            contribution = gw.contribution_score * gw.penetrance_score * af_factor
+            # ClinVar VUS downweight
+            vus_factor = _clinvar_vus_factor(v)
+            contribution *= vus_factor
             # Tier 3 variants get a lower ceiling
             if tier == 3:
                 contribution *= 0.5
@@ -382,6 +412,11 @@ def _score_mendelian_mod(
             contribution *= clingen_mult * domain_mult
             
             note_parts = [f"{gw.penetrance} penetrance variant in {gene}"]
+            note_parts.append(af_note)
+            if vus_factor < 1.0:
+                note_parts.append(f"ClinVar VUS/conflicting (×{vus_factor})")
+            if evidence_level == "pathogenic":
+                note_parts.append("ClinVar P/LP")
             if clingen_mult < 1.0:
                 note_parts.append(f"clingen_validity={gw.clingen_validity or 'missing'} (×{clingen_mult})")
             if domain_factor < 1.0 and is_vus_like:
@@ -691,16 +726,15 @@ def _score_regulatory(
             continue
         if not _is_high_impact(v):
             continue
-        af = _gnomad_af(v)
-        if af is not None and af > 0.01:
-            continue
+        # AF three-state policy: downweight common/None, no hard skip.
+        af_factor, af_note = _af_rarity_factor(v)
         gw = gene_map.get(gene)
-        contribution = (gw.contribution_score * 0.1) if gw else 0.05
+        contribution = ((gw.contribution_score * 0.1) if gw else 0.05) * af_factor
         results.append({
             "gene": gene,
             "variant": _variant_key(v),
             "contribution": round(contribution, 3),
-            "note": "Rare functional variant in regulatory region of core gene",
+            "note": f"Functional variant in regulatory region of core gene; {af_note}",
             "raw": v,
         })
     return results
