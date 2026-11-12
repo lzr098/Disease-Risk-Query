@@ -212,6 +212,10 @@ DISEASE_REF_CACHE = WORKBUDDY_DATA / "drq_disease_refs"
 
 # Built-in disease reference seeds (core genes + known GWAS/pathogenic loci).
 # These are used to bootstrap the cache and prioritize the gene set.
+# NOTE: this built-in dict is a legacy fallback. When a matching
+# references/disease_templates/*.py exists, DISEASE_BUILTIN_REFS is
+# overwritten by its TEMPLATE at the bottom of this file — edit the
+# template, not this dict, or the change will have no runtime effect.
 DISEASE_BUILTIN_REFS: dict[str, dict] = {'alzheimer disease': {'aliases': ['alzheimer', "alzheimer's disease", 'ad', 'load', 'familial alzheimer disease'],
                        'mode': 'mixed',
                        'gene_set': [{'gene': 'ABCA1',
@@ -9309,6 +9313,7 @@ DISEASE_BUILTIN_REFS: dict[str, dict] = {'alzheimer disease': {'aliases': ['alzh
 BUILTIN_DISEASE_KEYS = set(DISEASE_BUILTIN_REFS.keys())
 
 # ── Load external disease templates ──
+TEMPLATE_LOAD_ERRORS: list[str] = []
 _ext_dir = WORKBUDDY_SKILL / "references" / "disease_templates"
 if _ext_dir.is_dir():
     for _f in sorted(_ext_dir.glob("*.py")):
@@ -9320,8 +9325,8 @@ if _ext_dir.is_dir():
             _spec.loader.exec_module(_mod)
             if hasattr(_mod, "TEMPLATE_NAME") and hasattr(_mod, "TEMPLATE"):
                 DISEASE_BUILTIN_REFS[_mod.TEMPLATE_NAME] = _mod.TEMPLATE
-        except Exception:
-            pass
+        except Exception as _exc:
+            TEMPLATE_LOAD_ERRORS.append(f"{_f.name}: {type(_exc).__name__}: {_exc}")
 
 # Keywords used in auto mode to classify a disease as complex-trait.
 COMPLEX_DISEASE_KEYWORDS = [

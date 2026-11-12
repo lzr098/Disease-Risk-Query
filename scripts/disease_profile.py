@@ -126,7 +126,16 @@ class DomainRegion:
     note: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "DomainRegion":
+    def from_dict(cls, data: Any) -> "DomainRegion":
+        # disease_templates export legacy (start, end[, label]) regions;
+        # disease_profile_builder._normalize_builtin_ref uses the same mapping.
+        if isinstance(data, (tuple, list)):
+            if len(data) >= 2:
+                return cls(name=str(data[2]) if len(data) > 2 else "",
+                           residues=f"{data[0]}-{data[1]}", note="")
+            return cls(name="", residues=str(data), note="")
+        if not isinstance(data, dict):
+            return cls(name="", residues=str(data), note="")
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 

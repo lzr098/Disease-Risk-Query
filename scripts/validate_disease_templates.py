@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from constants import DISEASE_BUILTIN_REFS
+from constants import DISEASE_BUILTIN_REFS, TEMPLATE_LOAD_ERRORS
 from disease_profile import DiseaseProfile, VariantWeight
 
 
@@ -24,13 +24,17 @@ def _variant_key(v: dict) -> str:
 def validate() -> list[str]:
     issues: list[str] = []
     warnings: list[str] = []
+    for err in TEMPLATE_LOAD_ERRORS:
+        issues.append(f"disease template failed to load (fell back to legacy built-in dict): {err}")
 
     for disease, ref in DISEASE_BUILTIN_REFS.items():
         # ---- 1) Required fields ----
+        # prs_variants / key_regions are filled by _normalize_builtin_ref at
+        # runtime, so their absence in a template is not an error.
         required = [
             "aliases", "mode", "gene_set", "known_pathogenic_variants",
-            "gwas_lead_snps", "prs_variants", "prs_variants_high",
-            "regulatory_regions", "key_regions", "key_literature",
+            "gwas_lead_snps", "prs_variants_high",
+            "regulatory_regions", "key_literature",
         ]
         for field in required:
             if field not in ref:

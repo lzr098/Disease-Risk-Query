@@ -407,3 +407,13 @@ def test_apoe_tag_snps_match_grch38_reference():
     amd = next(v for v in DISEASE_BUILTIN_REFS["adult vision disorders"]["gwas_lead_snps"]
                if v.get("rsid") == "rs429358")
     assert (amd["ref"], amd["alt"], amd["effect_allele"]) == ("T", "C", "T")
+
+
+def test_builtin_profiles_convert_with_legacy_domain_regions():
+    """disease_templates export (start, end) tuples in key_regions."""
+    from disease_profile import DomainRegion
+    assert DomainRegion.from_dict((807, 1038)).residues == "807-1038"
+    assert DomainRegion.from_dict((1, 70, "TM")).name == "TM"
+    assert DomainRegion.from_dict({"name": "Abeta", "residues": "672-713"}).name == "Abeta"
+    for name, ref in DISEASE_BUILTIN_REFS.items():
+        DiseaseProfile.from_dict({"canonical_name": name, **ref})
