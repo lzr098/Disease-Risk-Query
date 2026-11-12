@@ -268,13 +268,34 @@ def _match_record(
     )
 
 
+_FASTA_REF_CACHE: dict[tuple[str, int], str] = {}
+
+
+def _fasta_ref_base(chrom: str, pos: int) -> str:
+    """GRCh38 reference base at chrom:pos, cached. Empty string on failure."""
+    key = (chrom, pos)
+    if key not in _FASTA_REF_CACHE:
+        base = ""
+        if GRCH38_FASTA.exists():
+            proc = subprocess.run(
+                ["samtools", "faidx", str(GRCH38_FASTA),
+                 f"{chrom.lstrip('chr')}:{pos}-{pos}"],
+                capture_output=True, text=True, check=False,
+            )
+            lines = [ln.strip() for ln in proc.stdout.splitlines()
+                     if ln.strip() and not ln.startswith(">")]
+            base = lines[0].upper() if lines else ""
+        _FASTA_REF_CACHE[key] = base
+    return _FASTA_REF_CACHE[key]
+
+
 def _infer_ref_ref(variant: VariantWeight, sex: Optional[str] = None) -> KnownVariantGenotype:
     """Return a REF/REF genotype for a variant absent from the VCF.
 
-    Dosage is computed from the VariantWeight structure:
-    - REF = variant.ref (typically other_allele / non-effect allele)
-    - ALT = variant.alt (typically effect_allele)
-    - GT 0/0 = homozygous REF
+    Dosage is counted against the real GRCh38 reference base (local FASTA,
+    cached).  Templates follow GWAS convention where the effect allele may
+    itself be the REF, so variant.ref — inferred as other_allele when not
+    declared — is not trustworthy for this purpose.
 
     If effect_allele == REF, then 0/0 = 2 copies of the effect allele → dosage=2.
     If effect_allele == ALT, then 0/0 = 0 copies → dosage=0.
@@ -285,6 +306,13 @@ def _infer_ref_ref(variant: VariantWeight, sex: Optional[str] = None) -> KnownVa
     ref_allele = _normalize_allele(variant.ref)
     alt_allele = _normalize_allele(variant.alt)
     effect = (variant.effect_allele or "").upper()
+
+    fasta_ref = _fasta_ref_base(variant.chrom, variant.pos)
+    if fasta_ref:
+        ref_allele = fasta_ref
+        alt_candidates = {effect, _normalize_allele(variant.other_allele), alt_allele} - {fasta_ref, ""}
+        if alt_candidates:
+            alt_allele = sorted(alt_candidates)[0]
 
     # Compute dosage: count of effect_allele in a 0/0 genotype
     if effect and effect == ref_allele:

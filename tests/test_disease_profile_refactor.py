@@ -417,3 +417,23 @@ def test_builtin_profiles_convert_with_legacy_domain_regions():
     assert DomainRegion.from_dict({"name": "Abeta", "residues": "672-713"}).name == "Abeta"
     for name, ref in DISEASE_BUILTIN_REFS.items():
         DiseaseProfile.from_dict({"canonical_name": name, **ref})
+
+
+def test_infer_ref_ref_uses_grch38_reference_for_dosage():
+    """effect allele == GRCh38 REF → homozygous-ref samples score 2 copies."""
+    from constants import GRCH38_FASTA
+    from disease_space_query import _infer_ref_ref
+    if not GRCH38_FASTA.exists():
+        pytest.skip("GRCh38 FASTA not available")
+    # rs429358: GRCh38 REF=T; effect=T (e.g. AMD non-ε4 allele, OR>1)
+    amd = VariantWeight(chrom="chr19", pos=44908684, effect_allele="T", other_allele="C")
+    g = _infer_ref_ref(amd)
+    assert (g.ref, g.dosage) == ("T", 2)
+    # rs7412: GRCh38 REF=C; effect=T (ε2) is the ALT
+    e2 = VariantWeight(chrom="chr19", pos=44908822, effect_allele="T", other_allele="C")
+    g2 = _infer_ref_ref(e2)
+    assert (g2.ref, g2.dosage) == ("C", 0)
+    # rs7903146 (TCF7L2): GRCh38 REF=C; effect=T is the risk ALT
+    mi = VariantWeight(chrom="chr10", pos=112998590, effect_allele="T", other_allele="C")
+    g3 = _infer_ref_ref(mi)
+    assert (g3.ref, g3.dosage) == ("C", 0)
