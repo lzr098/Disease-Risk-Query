@@ -2220,6 +2220,8 @@ TEMPLATE = {'aliases': ['vision disorders', 'vision loss', 'adult-onset vision l
                      'chrom': 'chr19',
                      'pos': 44908684,
                      'gene': 'APOE',
+                     'ref': 'T',
+                     'alt': 'C',
                      'effect_allele': 'T',
                      'other_allele': 'C',
                      'beta': 0.3577,

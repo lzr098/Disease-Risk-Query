@@ -378,3 +378,32 @@ def test_build_literature_cache_hit(monkeypatch):
         lit2 = build_literature_for_profile("test disease", ["GENE1"], cache_root=root)
     assert lit1 == lit2
     assert call_count["n"] == 1
+
+
+def test_apoe_tag_snps_match_grch38_reference():
+    """GRCh38 chr19: rs429358 T>C (Cys112Arg=ε4), rs7412 C>T (Arg158Cys=ε2)."""
+    from disease_space_query import _gt_to_dosage
+
+    # constants.py imports disease_templates/*.py at load time, so AD profiles
+    # come from alzheimer_disease.TEMPLATE (APOE tags live in prs_variants_high).
+    ad = DISEASE_BUILTIN_REFS["alzheimer disease"]
+    expected = {"rs429358": (44908684, "T", "C", "C"),
+                "rs7412": (44908822, "C", "T", "T")}  # pos, ref, alt, effect
+    found = [v for key in ("gwas_lead_snps", "prs_variants_high")
+             for v in ad.get(key, []) if v.get("rsid") in expected]
+    assert len(found) == 2
+    for v in found:
+        pos, ref_allele, alt_allele, effect = expected[v["rsid"]]
+        assert v["pos"] == pos and v["effect_allele"] == effect
+        w = VariantWeight.from_dict(v)
+        assert (w.ref, w.alt) == (ref_allele, alt_allele)
+        assert w.vcf_key == f"chr19:{pos}:{ref_allele}:{alt_allele}"
+
+    # ε4/ε4 (1/1 at rs429358) must count 2 risk alleles, not 0.
+    e4 = VariantWeight.from_dict(next(v for v in found if v["rsid"] == "rs429358"))
+    assert _gt_to_dosage("1/1", e4.effect_allele, e4.ref, e4.alt) == 2
+
+    # AMD: effect allele is the GRCh38 REF, so ref/alt must be explicit.
+    amd = next(v for v in DISEASE_BUILTIN_REFS["adult vision disorders"]["gwas_lead_snps"]
+               if v.get("rsid") == "rs429358")
+    assert (amd["ref"], amd["alt"], amd["effect_allele"]) == ("T", "C", "T")
